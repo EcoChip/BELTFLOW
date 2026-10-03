@@ -1400,7 +1400,9 @@ input:checked + .toggle-slider::before {
   transition: opacity 0.4s ease, visibility 0.4s ease;
 }
 
-.main-menu-screen.hidden {
+.main-menu-screen.closing,
+.main-menu-screen.hidden,
+.main-menu-screen.slide-out {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1423,6 +1425,7 @@ input:checked + .toggle-slider::before {
   z-index: 2;
 }
 
+.main-menu-screen.closing .menu-sidebar,
 .main-menu-screen.slide-out .menu-sidebar {
   transform: translateX(-100%);
   opacity: 0;

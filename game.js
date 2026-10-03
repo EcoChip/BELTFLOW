@@ -1947,9 +1947,6 @@ export class Renderer {
 
     this.drawTileBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, 6);
 
-    const trackColor = this.isDark ? '#333C4A' : '#D5CFC4';
-    const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.22)';
-
     // Detectar si la cinta es una curva inspeccionando vecinos
     let isLeftCurve = false;
     let isRightCurve = false;
@@ -3261,20 +3258,50 @@ export class UIManager {
 
   bindDOM() {
     // 1. Menú Principal Split-Screen
-    const btnMenuPlay = document.getElementById('menu-btn-play');
-    if (btnMenuPlay) btnMenuPlay.addEventListener('click', () => this.game.startGameFromMenu());
+    document.getElementById('menu-btn-play')?.addEventListener('click', () => {
+      this.game.audio.playPlaf();
+      this.game.startGameFromMenu();
+    });
 
-    const btnMenuLevels = document.getElementById('menu-btn-levels');
-    if (btnMenuLevels) btnMenuLevels.addEventListener('click', () => this.toggleLevelsModal(true));
+    document.getElementById('menu-btn-continue')?.addEventListener('click', () => {
+      this.game.audio.playPlaf();
+      this.game.startGameFromMenu();
+    });
 
-    const btnMenuSettings = document.getElementById('menu-btn-settings');
-    if (btnMenuSettings) btnMenuSettings.addEventListener('click', () => this.toggleSettingsModal(true));
+    document.getElementById('menu-btn-levels')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleLevelsModal(true);
+    });
 
-    const btnMenuCredits = document.getElementById('menu-btn-credits');
-    if (btnMenuCredits) btnMenuCredits.addEventListener('click', () => this.toggleCreditsModal(true));
+    document.getElementById('menu-btn-achievements')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleAchievementsModal(true);
+    });
 
-    const btnBackMenu = document.getElementById('btn-back-menu');
-    if (btnBackMenu) btnBackMenu.addEventListener('click', () => this.game.openMainMenu());
+    document.getElementById('menu-btn-shop')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleShopModal(true);
+    });
+
+    document.getElementById('menu-btn-editor')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleEditorModal(true);
+    });
+
+    document.getElementById('menu-btn-settings')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleSettingsModal(true);
+    });
+
+    document.getElementById('menu-btn-credits')?.addEventListener('click', () => {
+      this.game.audio.playTone(520, 'sine', 0.05, 0.02);
+      this.toggleCreditsModal(true);
+    });
+
+    document.getElementById('btn-back-menu')?.addEventListener('click', () => {
+      this.game.audio.playRotate();
+      this.game.openMainMenu();
+    });
 
     // 2. HUD y controles de juego
     const btnMode = document.getElementById('btn-mode-toggle');
@@ -3334,11 +3361,7 @@ export class UIManager {
     document.getElementById('btn-undo')?.addEventListener('click', () => this.game.undo());
     document.getElementById('btn-redo')?.addEventListener('click', () => this.game.redo());
 
-    // Botones del menú principal
-    document.getElementById('menu-btn-continue')?.addEventListener('click', () => this.game.startGameFromMenu());
-    document.getElementById('menu-btn-achievements')?.addEventListener('click', () => this.toggleAchievementsModal(true));
-    document.getElementById('menu-btn-shop')?.addEventListener('click', () => this.toggleShopModal(true));
-    document.getElementById('menu-btn-editor')?.addEventListener('click', () => this.toggleEditorModal(true));
+    // Botones de cierre de los nuevos modales
 
     document.getElementById('btn-close-achievements')?.addEventListener('click', () => this.toggleAchievementsModal(false));
     document.getElementById('btn-close-shop')?.addEventListener('click', () => this.toggleShopModal(false));
@@ -3904,9 +3927,7 @@ export class UIManager {
   }
 
   updateMenuStats() {
-    const summaryEl = document.getElementById('menu-stats-summary');
-    const playBtn = document.getElementById('menu-btn-play');
-    if (!summaryEl || !this.game || !this.game.saveData) return;
+    if (!this.game || !this.game.saveData) return;
 
     const save = this.game.saveData;
     const completedCount = (save.nivelesCompletados || []).length;
@@ -3916,13 +3937,25 @@ export class UIManager {
     }
 
     const coins = save.coins !== undefined ? save.coins : (save.monedas || 0);
-    summaryEl.textContent = `Nivel ${save.nivelActual || 1} · ${completedCount}/60 Completados · ${totalStars} ★ · ${coins} 🪙`;
 
-    if (playBtn) {
-      const titleEl = playBtn.querySelector('.menu-btn-title');
-      const descEl = playBtn.querySelector('.menu-btn-desc');
-      if (titleEl) titleEl.textContent = completedCount > 0 ? "Continuar Partida" : "Jugar";
-      if (descEl) descEl.textContent = completedCount > 0 ? `Retomar Nivel ${save.nivelActual || 1}` : "Comenzar el viaje de automatización";
+    const starsEl = document.getElementById('menu-total-stars');
+    if (starsEl) starsEl.textContent = `⭐ ${totalStars}/180`;
+
+    const levelsEl = document.getElementById('menu-total-levels');
+    if (levelsEl) levelsEl.textContent = `🏆 ${completedCount}/60`;
+
+    const coinsEl = document.getElementById('menu-coins');
+    if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
+
+    const continueBtn = document.getElementById('menu-btn-continue');
+    const continueLabel = document.getElementById('menu-continue-label');
+    if (continueBtn) {
+      if (completedCount > 0) {
+        continueBtn.style.display = 'flex';
+        if (continueLabel) continueLabel.textContent = `Continuar (Nivel ${save.nivelActual || 1})`;
+      } else {
+        continueBtn.style.display = 'none';
+      }
     }
   }
 
