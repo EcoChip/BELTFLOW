@@ -127,12 +127,49 @@ export class AudioManager {
     this.playTone(523.25, 'triangle', 0.12, 0.05); // C5
   }
 
+  playPlaf() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      // Descenso de tono suave tipo madera/goma relajante
+      const baseFreq = 210 + (Math.random() * 24 - 12);
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(115, now + 0.05);
+
+      gain.gain.setValueAtTime(0.045, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.07);
+    } catch (e) {}
+  }
+
   playDelete() {
     this.playTone(220.00, 'sine', 0.1, 0.04); // A3
   }
 
   playRotate() {
     this.playTone(440.00, 'sine', 0.06, 0.03); // A4
+  }
+
+  playError() {
+    this.playTone(196.00, 'triangle', 0.18, 0.045); // Tono bajo suave para error
+  }
+
+  playStreak() {
+    const chord = [587.33, 739.99, 880.00, 1174.66]; // D5, F#5, A5, D6 alegre y sutil
+    chord.forEach((freq, i) => {
+      setTimeout(() => this.playTone(freq, 'sine', 0.22, 0.035), i * 65);
+    });
   }
 
   playDelivery() {
@@ -155,6 +192,16 @@ export class Shapes {
   static matches(a, b) {
     if (!a && !b) return true;
     if (!a || !b) return false;
+
+    // Si ambos son formas de media pieza (solo tienen una de las dos mitades)
+    const aIsHalf = (a.left && !a.right) || (!a.left && a.right);
+    const bIsHalf = (b.left && !b.right) || (!b.left && b.right);
+
+    if (aIsHalf && bIsHalf) {
+      const halfA = a.left || a.right;
+      const halfB = b.left || b.right;
+      return Shapes.halfMatches(halfA, halfB);
+    }
 
     const matchLeft = Shapes.halfMatches(a.left, b.left);
     const matchRight = Shapes.halfMatches(a.right, b.right);
@@ -762,9 +809,21 @@ export class Renderer {
     this.ghost = null;
     this.particles = [];
     this.beltAnimOffset = 0;
+    this.placementEffects = new Map(); // key -> { startTime, duration, x, y, type }
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  addPlacementEffect(gridX, gridY, type = 'belt') {
+    if (this.reducedMotion) return;
+    this.placementEffects.set(this.grid.key(gridX, gridY), {
+      startTime: performance.now(),
+      duration: 190,
+      x: gridX,
+      y: gridY,
+      type: type
+    });
   }
 
   resize() {
@@ -846,9 +905,128 @@ export class Renderer {
 
     this.drawItems(ctx);
 
+    // Ondas y destellos de impacto de colocación ("plaf")
+    this.drawPlacementEffects(ctx);
+
+    // Indicadores flotantes de demanda sobre los almacenes
+    this.drawDeliveryBadges(ctx);
+
     ctx.restore();
 
     this.drawParticles(ctx, dt);
+  }
+
+  drawPlacementEffects(ctx) {
+    if (this.placementEffects.size === 0) return;
+    const now = performance.now();
+    const s = this.tileSize;
+
+    for (const [key, eff] of this.placementEffects.entries()) {
+      const elapsed = now - eff.startTime;
+      if (elapsed >= eff.duration) {
+        this.placementEffects.delete(key);
+        continue;
+      }
+
+      const t = elapsed / eff.duration;
+      const cx = (eff.x + 0.5) * s;
+      const cy = (eff.y + 0.5) * s;
+
+      // 1. Destello pastel breve (flash translúcido)
+      const flashAlpha = 0.35 * (1 - t);
+      ctx.fillStyle = this.isDark ? `rgba(168, 213, 186, ${flashAlpha})` : `rgba(168, 213, 186, ${flashAlpha * 1.3})`;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(eff.x * s + 2, eff.y * s + 2, s - 4, s - 4, 6);
+        ctx.fill();
+      } else {
+        ctx.fillRect(eff.x * s + 2, eff.y * s + 2, s - 4, s - 4);
+      }
+
+      // 2. Onda circular muy sutil que se expande y desvanece
+      const rippleRadius = s * 0.3 + s * 0.5 * t;
+      const rippleAlpha = 0.45 * (1 - t);
+      ctx.strokeStyle = this.isDark ? `rgba(168, 213, 186, ${rippleAlpha})` : `rgba(168, 213, 186, ${rippleAlpha * 1.2})`;
+      ctx.lineWidth = Math.max(1, 2.4 * (1 - t));
+      ctx.beginPath();
+      ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  drawDeliveryBadges(ctx) {
+    if (!this.game || !this.game.currentDemands) return;
+    const s = this.tileSize;
+    const isDark = this.isDark;
+
+    const deliveryPieces = this.grid.getAllPieces().filter(p => p.type === 'delivery');
+    if (deliveryPieces.length === 0) return;
+
+    for (const piece of deliveryPieces) {
+      const dIdx = piece.deliveryIndex;
+      const isSecondary = piece.secondary;
+
+      const matchingDemands = this.game.currentDemands.filter(d => {
+        if (d.deliveryIndex !== undefined) {
+          if (dIdx !== undefined && d.deliveryIndex !== dIdx) return false;
+          if (dIdx === undefined && isSecondary && d.deliveryIndex === 0) return false;
+          if (dIdx === undefined && !isSecondary && d.deliveryIndex === 1) return false;
+        }
+        return true;
+      });
+
+      if (matchingDemands.length === 0) continue;
+
+      const cx = (piece.x + 0.5) * s;
+      const cy = piece.y * s - 16;
+
+      const badgeWidth = Math.max(56, matchingDemands.length * 48 + 12);
+      const badgeHeight = 22;
+      const bx = cx - badgeWidth / 2;
+      const by = cy - badgeHeight / 2;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+
+      ctx.fillStyle = isDark ? '#232830' : '#FFFFFF';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(bx, by, badgeWidth, badgeHeight, 11);
+        ctx.fill();
+      } else {
+        ctx.fillRect(bx, by, badgeWidth, badgeHeight);
+      }
+
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.08)';
+      ctx.lineWidth = 1;
+      if (ctx.roundRect) {
+        ctx.stroke();
+      }
+
+      const sectionW = badgeWidth / matchingDemands.length;
+      for (let i = 0; i < matchingDemands.length; i++) {
+        const demand = matchingDemands[i];
+        const secCenter = bx + (i + 0.5) * sectionW;
+
+        ctx.save();
+        ctx.translate(secCenter - 14, cy);
+        Shapes.draw(ctx, demand.shape, 6.5, isDark);
+        ctx.restore();
+
+        ctx.font = '600 10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const isComplete = demand.delivered >= demand.quota;
+        ctx.fillStyle = isComplete ? (isDark ? '#A8D5BA' : '#4E9E6D') : (isDark ? '#E5E9F0' : '#2E3440');
+        const countText = isComplete ? `${demand.quota} ✔` : `${demand.delivered}/${demand.quota}`;
+        ctx.fillText(countText, secCenter - 4, cy);
+      }
+
+      ctx.restore();
+    }
   }
 
   drawGrid(ctx) {
@@ -902,6 +1080,25 @@ export class Renderer {
 
     ctx.save();
     ctx.translate(cx, cy);
+
+    // Animación de impacto "plaf" (Escala 1.3 -> 0.95 -> 1.0 con rebote suave)
+    const eff = this.placementEffects.get(this.grid.key(piece.x, piece.y));
+    if (eff) {
+      const now = performance.now();
+      const elapsed = now - eff.startTime;
+      if (elapsed < eff.duration) {
+        const t = elapsed / eff.duration;
+        let scale = 1.0;
+        if (t < 0.38) {
+          const subT = t / 0.38;
+          scale = 1.3 - 0.35 * Math.sin(subT * Math.PI * 0.5); // 1.3 -> 0.95
+        } else {
+          const subT = (t - 0.38) / 0.62;
+          scale = 0.95 + 0.05 * Math.sin(subT * Math.PI * 0.5); // 0.95 -> 1.0
+        }
+        ctx.scale(scale, scale);
+      }
+    }
 
     const angle = (piece.dir || 0) * (Math.PI / 2);
     ctx.rotate(angle);
@@ -1664,6 +1861,13 @@ export class InputManager {
       return;
     }
 
+    // Atajo para reiniciar el mapa del nivel (Ctrl+R / Shift+R / Cmd+R)
+    if ((e.ctrlKey || e.metaKey || e.shiftKey) && (e.key === 'r' || e.key === 'R')) {
+      e.preventDefault();
+      this.game.restartLevelMap();
+      return;
+    }
+
     switch (e.key.toLowerCase()) {
       case 'r':
         this.game.rotatePlacement();
@@ -1718,6 +1922,7 @@ export class InputManager {
 export class UIManager {
   constructor(game) {
     this.game = game;
+    this.activeChapter = 1;
     this.bindDOM();
   }
 
@@ -1732,6 +1937,36 @@ export class UIManager {
     document.getElementById('btn-pause').addEventListener('click', () => this.game.togglePause());
     document.getElementById('btn-speed').addEventListener('click', () => this.game.cycleSpeed());
     document.getElementById('btn-restart-level').addEventListener('click', () => this.game.restartCurrentLevel());
+
+    // Botón reiniciar mapa (limpiar piezas colocadas)
+    const btnClearMap = document.getElementById('btn-clear-map');
+    if (btnClearMap) btnClearMap.addEventListener('click', () => this.game.restartLevelMap());
+
+    const btnFabClear = document.getElementById('btn-fab-clear');
+    if (btnFabClear) btnFabClear.addEventListener('click', () => this.game.restartLevelMap());
+
+    // Pestañas de capítulos en selector de niveles
+    const tab1 = document.getElementById('tab-chapter-1');
+    const tab2 = document.getElementById('tab-chapter-2');
+    if (tab1) {
+      tab1.addEventListener('click', () => {
+        this.activeChapter = 1;
+        this.populateLevelsGrid();
+      });
+    }
+    if (tab2) {
+      tab2.addEventListener('click', () => {
+        const save = this.game.saveData;
+        const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
+        const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
+        if (!isChapter2Unlocked) {
+          this.showToast("🔒 Completa el nivel 20 para desbloquear el Capítulo 2", 2200);
+        }
+        this.activeChapter = 2;
+        this.populateLevelsGrid();
+      });
+    }
+
     document.getElementById('btn-levels-modal').addEventListener('click', () => this.toggleLevelsModal(true));
     document.getElementById('btn-sound-toggle').addEventListener('click', () => this.game.toggleSound());
     document.getElementById('btn-theme-toggle').addEventListener('click', () => this.game.toggleTheme());
@@ -1793,7 +2028,7 @@ export class UIManager {
     });
   }
 
-  updateLevelInfo(level) {
+  updateLevelInfo(level, demands = null) {
     document.getElementById('level-tag').textContent = `Nivel ${level.id}`;
     document.getElementById('level-title').textContent = level.name;
     document.getElementById('hint-text').textContent = level.hint || level.description;
@@ -1802,20 +2037,65 @@ export class UIManager {
     if (previewCanvas) {
       const pCtx = previewCanvas.getContext('2d');
       pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-      pCtx.save();
-      pCtx.translate(previewCanvas.width / 2, previewCanvas.height / 2);
-      Shapes.draw(pCtx, level.targetShape, 22, this.game.isDark);
-      pCtx.restore();
+      const isDark = this.game.isDark;
+
+      const activeDemands = demands || (level.demands ? level.demands : (level.targetShape ? [{ shape: level.targetShape, quota: level.quota }] : []));
+
+      if (activeDemands.length === 1) {
+        pCtx.save();
+        pCtx.translate(previewCanvas.width / 2, previewCanvas.height / 2);
+        Shapes.draw(pCtx, activeDemands[0].shape, 22, isDark);
+        pCtx.restore();
+      } else if (activeDemands.length === 2) {
+        pCtx.save();
+        pCtx.translate(previewCanvas.width * 0.3, previewCanvas.height / 2);
+        Shapes.draw(pCtx, activeDemands[0].shape, 13, isDark);
+        pCtx.restore();
+
+        pCtx.save();
+        pCtx.translate(previewCanvas.width * 0.7, previewCanvas.height / 2);
+        Shapes.draw(pCtx, activeDemands[1].shape, 13, isDark);
+        pCtx.restore();
+      } else if (activeDemands.length >= 3) {
+        const step = previewCanvas.width / (activeDemands.length + 1);
+        for (let i = 0; i < activeDemands.length; i++) {
+          pCtx.save();
+          pCtx.translate(step * (i + 1), previewCanvas.height / 2);
+          Shapes.draw(pCtx, activeDemands[i].shape, 10, isDark);
+          pCtx.restore();
+        }
+      }
     }
 
-    this.updateQuota(0, level.quota);
+    const totalQuota = demands ? demands.reduce((acc, d) => acc + d.quota, 0) : level.quota;
+    this.updateQuota(0, totalQuota, demands);
     this.updateAvailableTools(level.availableTools || ['belt']);
   }
 
-  updateQuota(delivered, quota) {
+  updateQuota(delivered, quota, demands = null) {
     document.getElementById('quota-display').textContent = `${delivered} / ${quota}`;
-    const pct = Math.min(100, (delivered / quota) * 100);
+    const pct = quota > 0 ? Math.min(100, (delivered / quota) * 100) : 100;
     document.getElementById('quota-progress-bar').style.width = `${pct}%`;
+  }
+
+  setLivesVisible(visible, lives = 5) {
+    const panel = document.getElementById('lives-panel');
+    if (!panel) return;
+    panel.style.display = visible ? 'flex' : 'none';
+    this.updateLives(lives, false);
+  }
+
+  updateLives(lives, isLost = false) {
+    const container = document.getElementById('lives-hearts-container');
+    if (!container) return;
+    const hearts = container.querySelectorAll('.heart-icon');
+    hearts.forEach((heart, idx) => {
+      if (idx < lives) {
+        heart.className = 'heart-icon active';
+      } else {
+        heart.className = 'heart-icon lost';
+      }
+    });
   }
 
   updateTimer(secondsLeft, isWarning = false) {
@@ -1906,6 +2186,10 @@ export class UIManager {
     if (show) {
       document.getElementById('victory-time').textContent = data.time || '00:00';
       document.getElementById('victory-best').textContent = data.best || '00:00';
+      const precEl = document.getElementById('victory-precision');
+      if (precEl) precEl.textContent = data.precision || '100%';
+      const delEl = document.getElementById('victory-delivered');
+      if (delEl) delEl.textContent = data.delivered || '--';
       modal.classList.add('active');
     } else {
       modal.classList.remove('active');
@@ -1933,21 +2217,36 @@ export class UIManager {
 
   populateLevelsGrid() {
     const container = document.getElementById('levels-grid-container');
+    if (!container) return;
     container.innerHTML = '';
 
     const save = this.game.saveData;
+    const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
+    const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
 
-    LEVELS.forEach(lvl => {
+    // Actualizar estilo visual de las pestañas
+    const tab1 = document.getElementById('tab-chapter-1');
+    const tab2 = document.getElementById('tab-chapter-2');
+    if (tab1) tab1.className = `level-tab-btn ${this.activeChapter === 1 ? 'active' : ''}`;
+    if (tab2) {
+      tab2.className = `level-tab-btn ${this.activeChapter === 2 ? 'active' : ''} ${!isChapter2Unlocked ? 'locked-tab' : ''}`;
+      tab2.title = isChapter2Unlocked ? "Capítulo 2: Maestría (21–40)" : "Completa el nivel 20 para desbloquear el Capítulo 2";
+    }
+
+    const startLevel = this.activeChapter === 1 ? 1 : 21;
+    const endLevel = this.activeChapter === 1 ? 20 : 40;
+    const filteredLevels = LEVELS.filter(l => l.id >= startLevel && l.id <= endLevel);
+
+    filteredLevels.forEach(lvl => {
       const isCompleted = save.nivelesCompletados.includes(lvl.id);
       const isCurrent = save.nivelActual === lvl.id;
-      const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
-      const isUnlocked = lvl.id <= maxUnlocked || lvl.id <= save.nivelActual;
+      const isUnlocked = (lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) && (lvl.id <= 20 || isChapter2Unlocked);
 
       const btn = document.createElement('button');
       btn.className = `level-card-btn ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${!isUnlocked ? 'locked' : ''}`;
       
       const bestTimeSecs = save.mejoresTiempos[lvl.id];
-      const timeStr = bestTimeSecs ? `${bestTimeSecs.toFixed(1)}s` : '--';
+      const timeStr = bestTimeSecs ? `${bestTimeSecs.toFixed(1)}s` : (isUnlocked ? '--' : '🔒');
 
       btn.innerHTML = `
         <span class="level-card-num">${lvl.id}</span>
@@ -1958,6 +2257,14 @@ export class UIManager {
         btn.addEventListener('click', () => {
           this.toggleLevelsModal(false);
           this.game.loadLevel(lvl.id);
+        });
+      } else {
+        btn.addEventListener('click', () => {
+          if (lvl.id > 20 && !isChapter2Unlocked) {
+            this.showToast("🔒 Completa el nivel 20 para desbloquear el Capítulo 2", 2000);
+          } else {
+            this.showToast(`Completa el nivel ${lvl.id - 1} para desbloquear este nivel`, 1800);
+          }
         });
       }
 
@@ -2016,6 +2323,14 @@ export class BeltFlowGame {
     this.currentLevel = null;
     this.deliveredCount = 0;
     this.timeElapsed = 0;
+
+    // Sistema de vidas, racha y estadísticas
+    this.lives = 5;
+    this.streak = 0;
+    this.totalDelivered = 0;
+    this.totalErrors = 0;
+    this.currentDemands = null;
+    this.totalQuota = 0;
 
     this.isPaused = false;
     this.speedMult = 1.0;
@@ -2078,9 +2393,31 @@ export class BeltFlowGame {
     this.currentLevel = lvl;
     this.deliveredCount = 0;
     this.timeElapsed = 0;
+    this.streak = 0;
+    this.lives = 5;
+    this.totalDelivered = 0;
+    this.totalErrors = 0;
     this.isPaused = false;
     this.sim.reset();
     this.grid.cells.clear();
+
+    // Normalizar demandas del nivel (soporte de demandas múltiples y simples)
+    if (lvl.demands && Array.isArray(lvl.demands)) {
+      this.currentDemands = lvl.demands.map(d => ({
+        ...d,
+        shape: Shapes.clone(d.shape),
+        delivered: 0
+      }));
+      this.totalQuota = this.currentDemands.reduce((sum, d) => sum + d.quota, 0);
+    } else {
+      this.currentDemands = [{
+        shape: Shapes.clone(lvl.targetShape),
+        quota: lvl.quota,
+        delivered: 0,
+        deliveryIndex: 0
+      }];
+      this.totalQuota = lvl.quota;
+    }
 
     if (lvl.fixedGrid) {
       for (const item of lvl.fixedGrid) {
@@ -2092,6 +2429,7 @@ export class BeltFlowGame {
           shape: item.shape ? Shapes.clone(item.shape) : null,
           color: item.color || null,
           secondary: item.secondary || false,
+          deliveryIndex: item.deliveryIndex !== undefined ? item.deliveryIndex : (item.secondary ? 1 : 0),
           fixed: true
         });
       }
@@ -2103,7 +2441,8 @@ export class BeltFlowGame {
     }
 
     this.saveData.nivelActual = lvl.id;
-    this.ui.updateLevelInfo(lvl);
+    this.ui.updateLevelInfo(lvl, this.currentDemands);
+    this.ui.setLivesVisible(!!lvl.hasLives, this.lives);
 
     // Ajustar herramienta inicial disponible
     if (!lvl.availableTools.includes(this.selectedTool) && this.selectedTool !== 'erase') {
@@ -2116,6 +2455,33 @@ export class BeltFlowGame {
     this.ui.setSpeedText(this.speedMult);
 
     this.centerCameraOnLevel();
+    this.updateGhost();
+  }
+
+  restartLevelMap() {
+    const userPieces = this.grid.getAllPieces().filter(p => !p.fixed);
+    if (userPieces.length > 5) {
+      if (!confirm("¿Deseas reiniciar la construcción de este nivel? Se borrarán las piezas que has colocado.")) {
+        return;
+      }
+    }
+
+    this.grid.clearNonFixed();
+    this.sim.reset();
+    this.deliveredCount = 0;
+    if (this.currentDemands) {
+      this.currentDemands.forEach(d => d.delivered = 0);
+    }
+    this.timeElapsed = 0;
+    this.streak = 0;
+    this.lives = 5;
+    this.totalDelivered = 0;
+    this.totalErrors = 0;
+
+    this.ui.updateQuota(0, this.totalQuota, this.currentDemands);
+    this.ui.updateLives(this.lives, false);
+    this.ui.showToast("Construcción del nivel reiniciada", 1500);
+    this.autoSave();
     this.updateGhost();
   }
 
@@ -2240,7 +2606,8 @@ export class BeltFlowGame {
         existing.dir = (existing.dir + 1) % 4;
         this.placementDir = existing.dir;
       }
-      this.audio.playPlace();
+      this.renderer.addPlacementEffect(x, y, 'belt');
+      this.audio.playPlaf();
       this.updateGhost(x, y);
       return;
     }
@@ -2321,7 +2688,8 @@ export class BeltFlowGame {
         this.placePieceAt(step.x, step.y);
       } else if (targetPiece.type === 'belt' && !targetPiece.fixed) {
         targetPiece.dir = step.dir;
-        this.audio.playPlace();
+        this.renderer.addPlacementEffect(step.x, step.y, 'belt');
+        this.audio.playPlaf();
       }
 
       prevX = step.x;
@@ -2366,7 +2734,8 @@ export class BeltFlowGame {
     if (existing && existing.type === 'belt' && this.selectedTool === 'belt') {
       if (existing.dir !== this.placementDir) {
         existing.dir = this.placementDir;
-        this.audio.playPlace();
+        this.renderer.addPlacementEffect(x, y, 'belt');
+        this.audio.playPlaf();
         this.updateGhost(x, y);
       }
       return;
@@ -2390,7 +2759,8 @@ export class BeltFlowGame {
     };
 
     this.grid.set(x, y, newPiece);
-    this.audio.playPlace();
+    this.renderer.addPlacementEffect(x, y, this.selectedTool);
+    this.audio.playPlaf();
     this.updateGhost(x, y);
   }
 
@@ -2431,35 +2801,93 @@ export class BeltFlowGame {
 
   restartCurrentLevel() {
     this.deliveredCount = 0;
+    if (this.currentDemands) {
+      this.currentDemands.forEach(d => d.delivered = 0);
+    }
     this.timeElapsed = 0;
+    this.streak = 0;
+    this.lives = 5;
+    this.totalDelivered = 0;
+    this.totalErrors = 0;
     this.sim.reset();
-    this.ui.updateQuota(0, this.currentLevel.quota);
+    this.ui.updateQuota(0, this.totalQuota, this.currentDemands);
+    this.ui.updateLives(this.lives, false);
     this.ui.showToast("Nivel reiniciado", 1500);
   }
 
   onShapeDelivered(shape, deliveryPiece) {
-    const target = (deliveryPiece && deliveryPiece.secondary && this.currentLevel.secondaryTarget) 
-      ? this.currentLevel.secondaryTarget 
-      : this.currentLevel.targetShape;
+    if (!this.currentDemands) return;
 
-    const isMatch = Shapes.matches(shape, target);
+    const dIdx = deliveryPiece.deliveryIndex !== undefined 
+      ? deliveryPiece.deliveryIndex 
+      : (deliveryPiece.secondary ? 1 : 0);
 
-    if (isMatch) {
-      this.deliveredCount++;
-      this.audio.playDelivery();
-
-      const screenPos = {
-        x: (deliveryPiece.x + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camX,
-        y: (deliveryPiece.y + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camY
-      };
-      this.renderer.addParticles(screenPos.x, screenPos.y, 14, '#A8D5BA');
-
-      this.ui.updateQuota(this.deliveredCount, this.currentLevel.quota);
-
-      if (this.deliveredCount >= this.currentLevel.quota) {
-        this.completeLevel();
+    let matchedDemand = null;
+    for (const demand of this.currentDemands) {
+      if (demand.deliveryIndex !== undefined && demand.deliveryIndex !== dIdx) continue;
+      if (Shapes.matches(shape, demand.shape)) {
+        if (demand.delivered < demand.quota) {
+          matchedDemand = demand;
+          break;
+        }
       }
     }
+
+    const screenPos = {
+      x: (deliveryPiece.x + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camX,
+      y: (deliveryPiece.y + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camY
+    };
+
+    if (matchedDemand) {
+      matchedDemand.delivered++;
+      this.deliveredCount++;
+      this.totalDelivered++;
+      this.streak++;
+
+      if (this.streak > 0 && this.streak % 10 === 0) {
+        this.audio.playStreak();
+        this.renderer.addParticles(screenPos.x, screenPos.y, 25, '#F5C6A5');
+        this.ui.showToast(`✨ ¡Racha x${this.streak} perfecta!`, 1800);
+      } else {
+        this.audio.playDelivery();
+        this.renderer.addParticles(screenPos.x, screenPos.y, 14, '#A8D5BA');
+      }
+
+      this.ui.updateQuota(this.deliveredCount, this.totalQuota, this.currentDemands);
+
+      const allComplete = this.currentDemands.every(d => d.delivered >= d.quota);
+      if (allComplete) {
+        this.completeLevel();
+      }
+    } else {
+      // Entrega errónea
+      this.totalErrors++;
+      this.streak = 0;
+
+      if (this.currentLevel.hasLives) {
+        this.lives = Math.max(0, this.lives - 1);
+        this.audio.playError();
+        this.ui.updateLives(this.lives, true);
+        this.renderer.addParticles(screenPos.x, screenPos.y, 16, '#E8A0A0');
+        this.ui.showToast(`⚠️ Forma incorrecta (−1 vida, quedan ${this.lives})`, 1800);
+
+        if (this.lives <= 0) {
+          this.handleGameOver();
+        }
+      }
+    }
+  }
+
+  handleGameOver() {
+    this.isPaused = true;
+    this.ui.setPlayPauseIcon(true);
+    this.ui.showToast("¡Casi! Vuelve a intentarlo...", 3200);
+
+    setTimeout(() => {
+      this.restartCurrentLevel();
+      this.isPaused = false;
+      this.ui.setPlayPauseIcon(false);
+    }, 1400);
   }
 
   completeLevel() {
@@ -2485,6 +2913,9 @@ export class BeltFlowGame {
       return `${m.toString().padStart(2, '0')}:${s.padStart(4, '0')}`;
     };
 
+    const totalAttempts = this.totalDelivered + this.totalErrors;
+    const precisionPct = totalAttempts > 0 ? Math.round((this.totalDelivered / totalAttempts) * 100) : 100;
+
     for (let k = 0; k < 4; k++) {
       setTimeout(() => {
         this.renderer.addParticles(
@@ -2498,7 +2929,9 @@ export class BeltFlowGame {
 
     this.ui.toggleVictoryModal(true, {
       time: formatTime(currentTime),
-      best: formatTime(this.saveData.mejoresTiempos[lvlId] || currentTime)
+      best: formatTime(this.saveData.mejoresTiempos[lvlId] || currentTime),
+      precision: `${precisionPct}%`,
+      delivered: `${this.totalDelivered} / ${this.totalQuota}`
     });
   }
 
@@ -2507,8 +2940,8 @@ export class BeltFlowGame {
     if (nextId <= LEVELS.length) {
       this.loadLevel(nextId);
     } else {
-      this.ui.showToast("¡Has completado todos los niveles de BeltFlow! Enhorabuena.", 4000);
-      this.loadLevel(20);
+      this.ui.showToast("¡Has completado todos los 40 niveles de BeltFlow! Enhorabuena maestro.", 4500);
+      this.loadLevel(40);
     }
   }
 

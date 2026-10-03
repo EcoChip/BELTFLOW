@@ -56,6 +56,20 @@
         </div>
       </div>
 
+      <!-- Vidas (Niveles avanzados 31+) -->
+      <div class="hud-panel lives-panel" id="lives-panel" style="display: none;">
+        <div class="lives-box" title="Vidas restantes (las formas incorrectas restan vidas)">
+          <span class="lives-label">Vidas</span>
+          <div class="lives-hearts" id="lives-hearts-container">
+            <span class="heart-icon active">❤️</span>
+            <span class="heart-icon active">❤️</span>
+            <span class="heart-icon active">❤️</span>
+            <span class="heart-icon active">❤️</span>
+            <span class="heart-icon active">❤️</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Controles de simulación y menú -->
       <div class="hud-panel top-controls">
         <!-- Alternador Modo Vista / Edición (Tecla Q) -->
@@ -79,11 +93,18 @@
         <!-- Velocidad (x1, x2, x4) -->
         <button id="btn-speed" class="speed-btn mono" title="Velocidad del juego">1x</button>
 
-        <!-- Reiniciar nivel actual -->
-        <button id="btn-restart-level" class="icon-btn" title="Reiniciar nivel" aria-label="Reiniciar">
+        <!-- Reiniciar nivel actual (cronómetro y cuota) -->
+        <button id="btn-restart-level" class="icon-btn" title="Reiniciar tiempo y entregas del nivel" aria-label="Reiniciar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
             <path d="M3 3v5h5"></path>
+          </svg>
+        </button>
+
+        <!-- Reiniciar mapa del nivel (Limpiar piezas colocadas) -->
+        <button id="btn-clear-map" class="icon-btn" title="Reiniciar mapa (limpiar piezas colocadas) [Ctrl+R / Shift+R]" aria-label="Limpiar mapa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
           </svg>
         </button>
 
@@ -177,6 +198,14 @@
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
         </svg>
         <span class="fab-label">BORRAR</span>
+      </button>
+
+      <!-- Botón Reiniciar Mapa (Limpiar piezas) -->
+      <button id="btn-fab-clear" class="fab" title="Reiniciar mapa (limpiar piezas) [Ctrl+R / Shift+R]" aria-label="Limpiar mapa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
+        </svg>
+        <span class="fab-label">MAPA</span>
       </button>
 
       <!-- Centrar cámara -->
@@ -348,6 +377,14 @@
             <div class="stat-label">Mejor Marca</div>
             <div class="stat-value mono" id="victory-best">00:45.2</div>
           </div>
+          <div class="stat-box">
+            <div class="stat-label">Precisión</div>
+            <div class="stat-value mono" id="victory-precision">100%</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Entregas</div>
+            <div class="stat-value mono" id="victory-delivered">14 / 14</div>
+          </div>
         </div>
 
         <div style="display: flex; gap: 12px; width: 100%;">
@@ -357,7 +394,7 @@
       </div>
     </div>
 
-    <!-- Modal de Selección de Niveles -->
+    <!-- Modal de Selección de Niveles (40 niveles con capítulos) -->
     <div class="modal-overlay" id="levels-modal">
       <div class="modal-card">
         <div class="modal-header">
@@ -365,8 +402,12 @@
           <button class="modal-close-btn" id="btn-close-levels" aria-label="Cerrar">✕</button>
         </div>
         <div class="modal-body">
+          <div class="levels-tabs" id="levels-tabs">
+            <button class="level-tab-btn active" id="tab-chapter-1">Capítulo 1: Fundamentos (1–20)</button>
+            <button class="level-tab-btn" id="tab-chapter-2">Capítulo 2: Maestría (21–40)</button>
+          </div>
           <div class="levels-grid" id="levels-grid-container">
-            <!-- Rellenado dinámicamente con los 20 niveles -->
+            <!-- Rellenado dinámicamente con los niveles del capítulo seleccionado -->
           </div>
         </div>
       </div>

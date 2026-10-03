@@ -839,18 +839,19 @@ button:focus-visible {
 }
 
 .victory-stats {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
   width: 100%;
   margin-bottom: 24px;
 }
 
 .stat-box {
-  flex: 1;
   background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 10px 12px;
+  text-align: left;
 }
 
 .stat-label {
@@ -865,6 +866,99 @@ button:focus-visible {
   font-weight: 700;
   color: var(--text-bright);
   margin-top: 4px;
+}
+
+/* Pestañas de Capítulos en el Selector de Niveles */
+.levels-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.level-tab-btn {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.level-tab-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.level-tab-btn.active {
+  background: var(--surface-active);
+  color: var(--text-main);
+  border-color: var(--pastel-mint);
+  box-shadow: 0 2px 8px rgba(168, 213, 186, 0.25);
+}
+
+.level-item.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+  background: var(--bg-color);
+}
+
+/* Panel de Vidas en HUD (Niveles 31+) */
+.lives-panel {
+  display: flex;
+  align-items: center;
+}
+
+.lives-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lives-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.lives-hearts {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.heart-icon {
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.25s ease, opacity 0.3s ease;
+  display: inline-block;
+}
+
+.heart-icon.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.heart-icon.lost {
+  opacity: 0.22;
+  filter: grayscale(1);
+  transform: scale(0.85);
+  animation: heartShake 0.4s ease;
+}
+
+@keyframes heartShake {
+  0% { transform: translateX(0) scale(1.1); }
+  25% { transform: translateX(-4px) scale(1.05); }
+  50% { transform: translateX(4px) scale(0.95); }
+  75% { transform: translateX(-2px) scale(0.9); }
+  100% { transform: translateX(0) scale(0.85); }
 }
 
 /* Grid de Selección de Niveles */
