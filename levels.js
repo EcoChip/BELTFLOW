@@ -59,14 +59,15 @@ export const LEVELS = [
   {
     id: 1,
     name: "Primeros Pasos",
-    description: "Conecta el extractor con la salida usando una cinta recta.",
-    hint: "Haz clic y arrastra con la Cinta seleccionada hacia la derecha.",
+    description: "Coloca un extractor sobre la mina de recursos y conéctalo con una cinta a la salida.",
+    hint: "Selecciona el Extractor (2), colócalo encima de la mina brillante y traza la cinta hacia la salida.",
     timeLimit: 180,
     quota: 5,
+    stars: { gold: 63, silver: 104, bronze: 158 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 5, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 5, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 11, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -79,10 +80,11 @@ export const LEVELS = [
     hint: "Une el camino con cintas transportadoras.",
     timeLimit: 180,
     quota: 8,
+    stars: { gold: 63, silver: 104, bronze: 158 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 4, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 13, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -95,10 +97,11 @@ export const LEVELS = [
     hint: "Pulsa 'R' o el botón de rotar para cambiar la dirección de la cinta.",
     timeLimit: 190,
     quota: 10,
+    stars: { gold: 67, silver: 110, bronze: 167 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 5, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 5, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
       { x: 11, y: 11, type: 'delivery', dir: 3, fixed: true }
     ]
   },
@@ -111,10 +114,11 @@ export const LEVELS = [
     hint: "Diseña un camino suave alrededor de los obstáculos naturales.",
     timeLimit: 200,
     quota: 10,
+    stars: { gold: 70, silver: 116, bronze: 176 },
     targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 4, y: 6, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 4, y: 6, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
       { x: 7, y: 5, type: 'obstacle', fixed: true },
       { x: 7, y: 6, type: 'obstacle', fixed: true },
       { x: 7, y: 7, type: 'obstacle', fixed: true },
@@ -130,11 +134,12 @@ export const LEVELS = [
     hint: "Conecta solo el extractor adecuado hacia la salida.",
     timeLimit: 200,
     quota: 12,
+    stars: { gold: 70, silver: 116, bronze: 176 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 4, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 4, y: 10, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 4, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 4, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 12, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -147,11 +152,12 @@ export const LEVELS = [
     hint: "Haz converger dos cintas en una sola para alimentar la salida rápidamente.",
     timeLimit: 170,
     quota: 18,
+    stars: { gold: 59, silver: 99, bronze: 150 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
-    availableTools: ['belt'],
+    availableTools: ['belt', 'extractor'],
     fixedGrid: [
-      { x: 4, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 4, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 4, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 4, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 12, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -164,11 +170,12 @@ export const LEVELS = [
     hint: "La trituradora destruye cualquier pieza que entre en ella.",
     timeLimit: 210,
     quota: 12,
+    stars: { gold: 74, silver: 122, bronze: 185 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER),
-    availableTools: ['belt', 'trash'],
+    availableTools: ['belt', 'extractor', 'trash'],
     fixedGrid: [
-      { x: 4, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
-      { x: 4, y: 9, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 4, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 4, y: 9, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
       { x: 12, y: 5, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -181,10 +188,11 @@ export const LEVELS = [
     hint: "La Cortadora divide la forma: la mitad izquierda sale recta y la derecha a 90°.",
     timeLimit: 220,
     quota: 10,
+    stars: { gold: 77, silver: 128, bronze: 194 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY, null, null), // solo izquierda
-    availableTools: ['belt', 'cutter', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'trash'],
     fixedGrid: [
-      { x: 4, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 12, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -197,10 +205,11 @@ export const LEVELS = [
     hint: "La mitad derecha sale por el lateral de la cortadora. Desecha la izquierda con la trituradora.",
     timeLimit: 220,
     quota: 12,
+    stars: { gold: 77, silver: 128, bronze: 194 },
     targetShape: { left: null, right: { type: SHAPE_TYPES.CIRCLE, color: PASTEL_COLORS.MINT } },
-    availableTools: ['belt', 'cutter', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'trash'],
     fixedGrid: [
-      { x: 4, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 12, y: 10, type: 'delivery', dir: 3, fixed: true }
     ]
   },
@@ -213,11 +222,12 @@ export const LEVELS = [
     hint: "Selecciona el Pintor, configúralo en Lavanda y pásale las formas.",
     timeLimit: 220,
     quota: 14,
+    stars: { gold: 77, silver: 128, bronze: 194 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER),
-    availableTools: ['belt', 'painter', 'trash'],
+    availableTools: ['belt', 'extractor', 'painter', 'trash'],
     allowedColors: [PASTEL_COLORS.LAVENDER, PASTEL_COLORS.MINT, PASTEL_COLORS.SKY],
     fixedGrid: [
-      { x: 4, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 13, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -230,11 +240,12 @@ export const LEVELS = [
     hint: "Pasa la estrella por el pintor y después por la cortadora.",
     timeLimit: 240,
     quota: 12,
+    stars: { gold: 84, silver: 139, bronze: 211 },
     targetShape: { left: { type: SHAPE_TYPES.STAR, color: PASTEL_COLORS.CORAL }, right: null },
-    availableTools: ['belt', 'cutter', 'painter', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL, PASTEL_COLORS.MINT],
     fixedGrid: [
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: true },
       { x: 13, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -247,11 +258,12 @@ export const LEVELS = [
     hint: "Conecta la salida derecha de la cortadora directamente al pintor.",
     timeLimit: 240,
     quota: 12,
+    stars: { gold: 84, silver: 139, bronze: 211 },
     targetShape: { left: null, right: { type: SHAPE_TYPES.DIAMOND, color: PASTEL_COLORS.PEACH } },
-    availableTools: ['belt', 'cutter', 'painter', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'trash'],
     allowedColors: [PASTEL_COLORS.PEACH, PASTEL_COLORS.SKY],
     fixedGrid: [
-      { x: 3, y: 7, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 7, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
       { x: 13, y: 9, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -264,11 +276,12 @@ export const LEVELS = [
     hint: "El túnel transporta piezas bajo tierra hasta 4 celdas en línea recta.",
     timeLimit: 250,
     quota: 15,
+    stars: { gold: 88, silver: 145, bronze: 220 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     fixedGrid: [
-      { x: 4, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 8, y: 4, type: 'spawner', dir: 1, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 8, y: 4, type: 'mine', dir: 1, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 13, y: 8, type: 'delivery', dir: 2, fixed: true },
       { x: 8, y: 12, type: 'trash', dir: 1, fixed: true }
     ]
@@ -282,11 +295,12 @@ export const LEVELS = [
     hint: "Corta ambas formas y aliméntalas a los dos lados de la Mezcladora.",
     timeLimit: 260,
     quota: 10,
+    stars: { gold: 91, silver: 151, bronze: 229 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt', 'cutter', 'mixer', 'trash', 'tunnel'],
+    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'trash', 'tunnel'],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 14, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -299,11 +313,12 @@ export const LEVELS = [
     hint: "Corta círculos, píntalos por separado y únelos en la Mezcladora.",
     timeLimit: 280,
     quota: 10,
+    stars: { gold: 98, silver: 162, bronze: 246 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER),
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 14, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -316,12 +331,13 @@ export const LEVELS = [
     hint: "Corta ambas formas, pinta el rombo de durazno y fusiona las mitades.",
     timeLimit: 290,
     quota: 12,
+    stars: { gold: 102, silver: 168, bronze: 255 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.PEACH],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
       { x: 15, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -334,12 +350,13 @@ export const LEVELS = [
     hint: "Aprovecha los túneles para cruzar líneas sin ocupar espacio extra.",
     timeLimit: 300,
     quota: 12,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL, PASTEL_COLORS.SKY],
     fixedGrid: [
-      { x: 4, y: 4, type: 'spawner', dir: 1, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
-      { x: 4, y: 12, type: 'spawner', dir: 3, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 4, y: 4, type: 'mine', dir: 1, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 4, y: 12, type: 'mine', dir: 3, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 9, y: 7, type: 'obstacle', fixed: true },
       { x: 9, y: 8, type: 'obstacle', fixed: true },
       { x: 9, y: 9, type: 'obstacle', fixed: true },
@@ -355,17 +372,18 @@ export const LEVELS = [
     hint: "Aprovecha la cortadora para la salida A y pinta los círculos grises con lavanda para la salida B.",
     timeLimit: 320,
     quota: 14,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: { left: { type: SHAPE_TYPES.CIRCLE, color: PASTEL_COLORS.MINT }, right: null },
     secondaryTarget: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'salida_a', name: 'Medio Círculo Menta', shape: { left: { type: SHAPE_TYPES.CIRCLE, color: PASTEL_COLORS.MINT }, right: null }, quota: 7, deliveryIndex: 0 },
       { id: 'salida_b', name: 'Círculo Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER), quota: 7, deliveryIndex: 1 }
     ],
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 15, y: 5, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 15, y: 11, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]
@@ -379,17 +397,18 @@ export const LEVELS = [
     hint: "Usa múltiples líneas paralelas para mantener un flujo continuo.",
     timeLimit: 220,
     quota: 25,
+    stars: { gold: 77, silver: 128, bronze: 194 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
     demands: [
       { id: 'estrella_rombo', name: 'Estrella-Rombo', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 25 }
     ],
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL, PASTEL_COLORS.PEACH],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
-      { x: 3, y: 7, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
-      { x: 3, y: 10, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
-      { x: 3, y: 13, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 7, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 13, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
       { x: 15, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -402,6 +421,7 @@ export const LEVELS = [
     hint: "Dispones de todas las herramientas y recursos infinitos. ¡Completa este nivel para desbloquear la Maestría!",
     timeLimit: null,
     quota: 30,
+    stars: { gold: 96, silver: 165, bronze: 255 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'estrella_rombo_master', name: 'Estrella-Rombo Menta/Lavanda', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 30 }
@@ -409,8 +429,8 @@ export const LEVELS = [
     availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: false },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: false },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: false },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: false },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -427,16 +447,17 @@ export const LEVELS = [
     hint: "Entrelaza o fusiona tus cintas antes de que lleguen a la entrada del almacén.",
     timeLimit: 260,
     quota: 16,
+    stars: { gold: 91, silver: 151, bronze: 229 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
     demands: [
       { id: 'cuadrado_cielo', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 8 },
       { id: 'circulo_menta', name: 'Círculo Menta', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 8 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -449,16 +470,17 @@ export const LEVELS = [
     hint: "Usa cintas que converjan en una cinta principal compartida hacia la salida.",
     timeLimit: 280,
     quota: 20,
+    stars: { gold: 98, silver: 162, bronze: 246 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH),
     demands: [
       { id: 'triangulo_durazno', name: 'Triángulo Durazno', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), quota: 10 },
       { id: 'estrella_lavanda', name: 'Estrella Lavanda', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 10 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -471,16 +493,17 @@ export const LEVELS = [
     hint: "Corta los rombos con la cortadora y conduce la mitad requerida al almacén, descartando o desviando el resto.",
     timeLimit: 290,
     quota: 16,
+    stars: { gold: 102, silver: 168, bronze: 255 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
     demands: [
       { id: 'circulo_menta_23', name: 'Círculo Menta', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 8 },
       { id: 'medio_rombo_cielo', name: 'Medio Rombo Cielo', shape: { left: { type: SHAPE_TYPES.DIAMOND, color: PASTEL_COLORS.SKY }, right: null }, quota: 8 }
     ],
-    availableTools: ['belt', 'cutter', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -493,18 +516,19 @@ export const LEVELS = [
     hint: "Organiza tres líneas paralelas limpias que desemboquen en la salida.",
     timeLimit: 300,
     quota: 18,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
     demands: [
       { id: 'circulo_24', name: 'Círculo Menta', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 6 },
       { id: 'cuadrado_24', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 6 },
       { id: 'triangulo_24', name: 'Triángulo Durazno', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), quota: 6 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -517,18 +541,19 @@ export const LEVELS = [
     hint: "El almacén aceptará cualquier forma solicitada; prioriza la de mayor volumen para no quedarte sin tiempo.",
     timeLimit: 300,
     quota: 24,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
     demands: [
       { id: 'cuadrado_25', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 12 },
       { id: 'estrella_25', name: 'Estrella Lavanda', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 8 },
       { id: 'rombo_25', name: 'Rombo Coral', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL), quota: 4 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -541,16 +566,17 @@ export const LEVELS = [
     hint: "Pasa cada forma por un pintor con su color asignado antes de llevarlas a la salida.",
     timeLimit: 300,
     quota: 20,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
     demands: [
       { id: 'cuadrado_cielo_p', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 },
       { id: 'circulo_coral_p', name: 'Círculo Coral', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.CORAL), quota: 10 }
     ],
-    availableTools: ['belt', 'painter', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'painter', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.SKY, PASTEL_COLORS.CORAL],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -563,14 +589,15 @@ export const LEVELS = [
     hint: "Corta el círculo gris, pinta una mitad de menta, la otra de lavanda y reúnelas en la mezcladora.",
     timeLimit: 320,
     quota: 12,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'circulo_bicolor', name: 'Círculo Menta-Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER), quota: 12 }
     ],
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -583,16 +610,17 @@ export const LEVELS = [
     hint: "Los túneles pueden atravesar tanto obstáculos de roca como otras cintas transportadoras.",
     timeLimit: 340,
     quota: 28,
+    stars: { gold: 119, silver: 197, bronze: 299 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT),
     demands: [
       { id: 'estrella_28', name: 'Estrella Menta', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT), quota: 14 },
       { id: 'rombo_28', name: 'Rombo Cielo', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), quota: 14 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), fixed: true },
       { x: 9, y: 4, type: 'obstacle', fixed: true },
       { x: 9, y: 5, type: 'obstacle', fixed: true },
       { x: 9, y: 6, type: 'obstacle', fixed: true },
@@ -613,16 +641,17 @@ export const LEVELS = [
     hint: "Haz que una de las dos líneas pase por un túnel subterráneo en el punto de intersección.",
     timeLimit: 320,
     quota: 20,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.PEACH),
     demands: [
       { id: 'cuadrado_durazno_29', name: 'Cuadrado Durazno', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.PEACH), quota: 10, deliveryIndex: 0 },
       { id: 'triangulo_coral_29', name: 'Triángulo Coral', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), quota: 10, deliveryIndex: 1 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.PEACH), fixed: true },
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), fixed: true },
       { x: 16, y: 4, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 16, y: 12, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]
@@ -636,15 +665,16 @@ export const LEVELS = [
     hint: "Construye rápidamente la cadena de corte y mezcla para maximizar el caudal de entregas por minuto.",
     timeLimit: 175,
     quota: 18,
+    stars: { gold: 61, silver: 102, bronze: 154 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH),
     demands: [
       { id: 'circulo_triangulo_30', name: 'Círculo-Triángulo', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), quota: 18 }
     ],
-    availableTools: ['belt', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -658,14 +688,15 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 300,
     quota: 15,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: { left: { type: SHAPE_TYPES.SQUARE, color: PASTEL_COLORS.MINT }, right: null },
     demands: [
       { id: 'medio_cuadrado_31', name: 'Medio Cuadrado Menta', shape: { left: { type: SHAPE_TYPES.SQUARE, color: PASTEL_COLORS.MINT }, right: null }, quota: 15 }
     ],
-    availableTools: ['belt', 'cutter', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -679,15 +710,16 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 300,
     quota: 16,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY),
     demands: [
       { id: 'triangulo_cielo_32', name: 'Triángulo Cielo Puro', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), quota: 16 }
     ],
-    availableTools: ['belt', 'cutter', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -701,15 +733,16 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 320,
     quota: 12,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'circulo_estrella_33', name: 'Círculo-Estrella Menta/Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 12 }
     ],
-    availableTools: ['belt', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -723,15 +756,16 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 340,
     quota: 12,
+    stars: { gold: 119, silver: 197, bronze: 299 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.CORAL, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY),
     demands: [
       { id: 'circulo_triangulo_34', name: 'Círculo Coral / Triángulo Cielo', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.CORAL, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), quota: 12 }
     ],
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -745,16 +779,17 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 340,
     quota: 20,
+    stars: { gold: 119, silver: 197, bronze: 299 },
     targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH),
     demands: [
       { id: 'sim_a', name: 'Cuadrado / Círculo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH), quota: 10 },
       { id: 'sim_b', name: 'Círculo / Cuadrado', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 }
     ],
-    availableTools: ['belt', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -768,15 +803,16 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 320,
     quota: 24,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'rombo_norte', name: 'Rombo Norte', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 12, deliveryIndex: 0 },
       { id: 'rombo_sur', name: 'Rombo Sur', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 12, deliveryIndex: 1 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), fixed: true },
       { x: 16, y: 4, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 16, y: 12, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]
@@ -791,16 +827,17 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 320,
     quota: 24,
+    stars: { gold: 112, silver: 186, bronze: 282 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL),
     demands: [
       { id: 'estrella_coral_37', name: 'Estrella Coral (Norte)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 12, deliveryIndex: 0 },
       { id: 'circulo_cielo_37', name: 'Círculo Cielo (Sur)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), quota: 12, deliveryIndex: 1 }
     ],
-    availableTools: ['belt', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 5, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
-      { x: 3, y: 11, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
       { x: 16, y: 4, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 16, y: 12, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]
@@ -815,15 +852,16 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 300,
     quota: 20,
+    stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: { left: { type: SHAPE_TYPES.STAR, color: PASTEL_COLORS.MINT }, right: null },
     demands: [
       { id: 'estrella_pura_38', name: 'Media Estrella Menta Pura', shape: { left: { type: SHAPE_TYPES.STAR, color: PASTEL_COLORS.MINT }, right: null }, quota: 20 }
     ],
-    availableTools: ['belt', 'cutter', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
-      { x: 3, y: 6, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
-      { x: 3, y: 10, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 6, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -837,17 +875,18 @@ export const LEVELS = [
     hasLives: true,
     timeLimit: 260,
     quota: 30,
+    stars: { gold: 91, silver: 151, bronze: 229 },
     targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL),
     demands: [
       { id: 'rombo_estrella_39', name: 'Rombo-Estrella Bicolor', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 15 },
       { id: 'cuadrado_cielo_39', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 15 }
     ],
-    availableTools: ['belt', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
       { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -861,6 +900,7 @@ export const LEVELS = [
     hasLives: false,
     timeLimit: null,
     quota: 40,
+    stars: { gold: 128, silver: 220, bronze: 340 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER),
     demands: [
       { id: 'd40_1', name: 'Círculo / Estrella Menta-Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 10 },
@@ -871,10 +911,10 @@ export const LEVELS = [
     availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
     fixedGrid: [
-      { x: 3, y: 4, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: false },
-      { x: 3, y: 8, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: false },
-      { x: 3, y: 12, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), fixed: false },
-      { x: 3, y: 16, type: 'spawner', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: false },
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: false },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: false },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), fixed: false },
+      { x: 3, y: 16, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: false },
       { x: 18, y: 6, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 18, y: 14, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]

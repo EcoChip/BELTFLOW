@@ -19,8 +19,67 @@
     <!-- Lienzo principal de renderizado 60 FPS -->
     <canvas id="game-canvas"></canvas>
 
+    <!-- Menú Principal Split-Screen (Pantalla de bienvenida y screensaver) -->
+    <div id="main-menu-screen" class="main-menu-screen">
+      <aside class="menu-sidebar">
+        <div class="menu-header">
+          <div class="menu-logo-badge">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 2a10 10 0 0 1 10 10M12 6a6 6 0 0 1 6 6"></path>
+            </svg>
+          </div>
+          <h1 class="menu-title heading">BeltFlow</h1>
+          <p class="menu-tagline">Puzles de automatización relajantes y anti-fatiga</p>
+        </div>
+
+        <nav class="menu-actions">
+          <button id="menu-btn-play" class="menu-btn menu-btn-primary">
+            <span class="menu-btn-icon">▶</span>
+            <span class="menu-btn-text">Jugar</span>
+          </button>
+          <button id="menu-btn-continue" class="menu-btn menu-btn-secondary">
+            <span class="menu-btn-icon">↺</span>
+            <span class="menu-btn-text" id="menu-continue-label">Continuar</span>
+          </button>
+          <button id="menu-btn-levels" class="menu-btn">
+            <span class="menu-btn-icon">☰</span>
+            <span class="menu-btn-text">Seleccionar Nivel (40)</span>
+          </button>
+          <button id="menu-btn-settings" class="menu-btn">
+            <span class="menu-btn-icon">⚙</span>
+            <span class="menu-btn-text">Ajustes & Estética</span>
+          </button>
+          <button id="menu-btn-credits" class="menu-btn">
+            <span class="menu-btn-icon">ℹ</span>
+            <span class="menu-btn-text">Créditos</span>
+          </button>
+        </nav>
+
+        <div class="menu-footer">
+          <div class="menu-stats">
+            <span class="menu-stat-item" id="menu-total-stars">⭐ 0/120</span>
+            <span class="menu-stat-item" id="menu-total-levels">🏆 0/40</span>
+          </div>
+          <span class="menu-version">v2.0 • Diseñado para la calma visual</span>
+        </div>
+      </aside>
+
+      <div class="menu-preview-overlay">
+        <div class="preview-hint-pill">
+          <span class="preview-dot"></span>
+          <span>Demostración relajante continua • Pulsa Jugar para interactuar</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Barra de información y controles superior (HUD) -->
     <header class="top-hud">
+      <!-- Marca y Activador Oculto Hacker (3ª letra 'l') -->
+      <div class="hud-panel hud-brand-panel">
+        <span class="hud-brand-text">Be<span id="hacker-trigger" class="hacker-trigger" title="BeltFlow">l</span>tFlow</span>
+      </div>
+
       <!-- Info de nivel -->
       <div class="hud-panel">
         <div class="level-info-box">
@@ -72,6 +131,14 @@
 
       <!-- Controles de simulación y menú -->
       <div class="hud-panel top-controls">
+        <!-- Volver al Menú Principal -->
+        <button id="btn-back-menu" class="icon-btn" title="Menú Principal" aria-label="Menú">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </button>
+
         <!-- Alternador Modo Vista / Edición (Tecla Q) -->
         <button id="btn-mode-toggle" class="mode-toggle-btn edit" title="Alternar Modo Vista / Edición (Tecla Q)" aria-label="Modo Vista / Edición">
           <span class="mode-toggle-icon" id="mode-toggle-icon">✏️</span>
@@ -368,6 +435,18 @@
         <h2 class="victory-title heading">¡Nivel Completado!</h2>
         <p class="victory-subtitle" id="victory-message">Has optimizado la línea de producción a la perfección.</p>
 
+        <!-- Estrellas conseguidas (Oro, Plata, Bronce) -->
+        <div class="victory-stars" id="victory-stars">
+          <span class="star-item" id="victory-star-1">★</span>
+          <span class="star-item" id="victory-star-2">★</span>
+          <span class="star-item" id="victory-star-3">★</span>
+        </div>
+        <div class="star-benchmarks" id="victory-star-benchmarks">
+          <span class="benchmark-pill" id="bench-gold">🥇 Oro &lt; 45s</span>
+          <span class="benchmark-pill" id="bench-silver">🥈 Plata &lt; 70s</span>
+          <span class="benchmark-pill" id="bench-bronze">🥉 Bronce &lt; 120s</span>
+        </div>
+
         <div class="victory-stats">
           <div class="stat-box">
             <div class="stat-label">Tiempo</div>
@@ -394,7 +473,7 @@
       </div>
     </div>
 
-    <!-- Modal de Selección de Niveles (40 niveles con capítulos) -->
+    <!-- Modal de Selección de Niveles (40 niveles con capítulos y estrellas) -->
     <div class="modal-overlay" id="levels-modal">
       <div class="modal-card">
         <div class="modal-header">
@@ -407,67 +486,240 @@
             <button class="level-tab-btn" id="tab-chapter-2">Capítulo 2: Maestría (21–40)</button>
           </div>
           <div class="levels-grid" id="levels-grid-container">
-            <!-- Rellenado dinámicamente con los niveles del capítulo seleccionado -->
+            <!-- Rellenado dinámicamente con los niveles y estrellas -->
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal de Configuración y Ayuda -->
+    <!-- Modal de Configuración y Ayuda (Con pestañas de Juego y Estética) -->
     <div class="modal-overlay" id="settings-modal">
       <div class="modal-card">
         <div class="modal-header">
-          <h2 class="modal-title heading">Ajustes & Controles</h2>
+          <h2 class="modal-title heading">Ajustes</h2>
           <button class="modal-close-btn" id="btn-close-settings" aria-label="Cerrar">✕</button>
         </div>
         <div class="modal-body">
-          <div class="setting-row">
-            <div class="setting-label-box">
-              <span class="setting-name">Modo Oscuro</span>
-              <span class="setting-desc">Alterna entre paleta clara suave y descansada nocturna</span>
+          <!-- Pestañas de Ajustes -->
+          <div class="settings-tabs" id="settings-tabs">
+            <button class="settings-tab-btn active" id="tab-cfg-game">Juego</button>
+            <button class="settings-tab-btn" id="tab-cfg-aesthetic">Estética & Paletas</button>
+          </div>
+
+          <!-- Panel de Ajustes: Juego -->
+          <div class="settings-tab-panel active" id="panel-cfg-game">
+            <div class="setting-row">
+              <div class="setting-label-box">
+                <span class="setting-name">Modo Oscuro</span>
+                <span class="setting-desc">Alterna entre paleta clara suave y descansada nocturna</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-darkmode">
+                <span class="toggle-slider"></span>
+              </label>
             </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="setting-darkmode">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
 
-          <div class="setting-row">
-            <div class="setting-label-box">
-              <span class="setting-name">Modo de Interfaz</span>
-              <span class="setting-desc">Auto-detectar o forzar botones táctiles en pantalla</span>
+            <div class="setting-row">
+              <div class="setting-label-box">
+                <span class="setting-name">Volumen de Sonido</span>
+                <span class="setting-desc">Nivel de los efectos acústicos suaves</span>
+              </div>
+              <div class="volume-slider-box">
+                <input type="range" id="setting-volume-slider" min="0" max="100" value="80" class="slider-input">
+                <span class="mono volume-val" id="setting-volume-val">80%</span>
+              </div>
             </div>
-            <select id="setting-controls-mode" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px;">
-              <option value="auto">Automático</option>
-              <option value="touch">Táctil (Pantalla)</option>
-              <option value="mouse">Ratón / Teclado</option>
-            </select>
-          </div>
 
-          <div class="setting-row">
-            <div class="setting-label-box">
-              <span class="setting-name">Reducir Animaciones</span>
-              <span class="setting-desc">Suprime efectos y partículas para mayor descanso visual</span>
+            <div class="setting-row">
+              <div class="setting-label-box">
+                <span class="setting-name">Modo de Interfaz</span>
+                <span class="setting-desc">Auto-detectar o forzar botones táctiles en pantalla</span>
+              </div>
+              <select id="setting-controls-mode" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px;">
+                <option value="auto">Automático</option>
+                <option value="touch">Táctil (Pantalla)</option>
+                <option value="mouse">Ratón / Teclado</option>
+              </select>
             </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="setting-reduced-motion">
-              <span class="toggle-slider"></span>
-            </label>
+
+            <div class="setting-row">
+              <div class="setting-label-box">
+                <span class="setting-name">Reducir Animaciones</span>
+                <span class="setting-desc">Suprime efectos y partículas para mayor descanso visual</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-reduced-motion">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div style="margin-top: 10px; padding: 12px; background: var(--bg-color); border-radius: 10px; font-size: 13px; color: var(--text-muted);">
+              <strong style="color: var(--text-bright); display: block; margin-bottom: 6px;">Controles de PC:</strong>
+              • Clic izquierdo: Colocar pieza<br>
+              • Clic derecho: Eliminar pieza<br>
+              • Tecla Q: Alternar Modo Vista / Edición<br>
+              • Teclas 1-8: Seleccionar componente<br>
+              • Tecla R: Rotar pieza<br>
+              • Tecla Espacio: Pausar / Continuar (o mantener pulsado para desplazar)<br>
+              • Botón central del ratón: Desplazar mapa libremente<br>
+              • Teclas WASD / Flechas: Desplazar mapa<br>
+              • Teclas + / - o rueda: Zoom
+            </div>
+
+            <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
+              <button id="btn-reset-save" class="btn btn-danger" style="font-size: 12px; padding: 6px 12px;">Reiniciar Todo el Progreso</button>
+            </div>
           </div>
 
-          <div style="margin-top: 10px; padding: 12px; background: var(--bg-color); border-radius: 10px; font-size: 13px; color: var(--text-muted);">
-            <strong style="color: var(--text-bright); display: block; margin-bottom: 6px;">Controles de PC:</strong>
-            • Clic izquierdo: Colocar pieza<br>
-            • Clic derecho: Eliminar pieza<br>
-            • Rueda o teclas 1-8: Seleccionar componente<br>
-            • Tecla R: Rotar pieza<br>
-            • Tecla Espacio: Pausar / Continuar<br>
-            • Teclas WASD / Flechas / Botón central: Mover mapa<br>
-            • Teclas + / - o rueda con Ctrl: Zoom
+          <!-- Panel de Ajustes: Estética & Paletas (Presets aplicados en caliente) -->
+          <div class="settings-tab-panel" id="panel-cfg-aesthetic" style="display: none;">
+            <p class="aesthetic-desc">Personaliza el aspecto cromático general de BeltFlow en tiempo real con nuestras 6 paletas armonizadas:</p>
+            <div class="palette-presets-grid" id="palette-presets-grid">
+              <div class="palette-card active" data-preset="suave">
+                <div class="palette-preview-dots">
+                  <span style="background: #F2F0EB;"></span>
+                  <span style="background: #A8D5BA;"></span>
+                  <span style="background: #A9CCE3;"></span>
+                  <span style="background: #C9B6E4;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Suave (Original)</strong>
+                  <span class="palette-meta">Fondo lino, menta y cielo relajantes</span>
+                </div>
+              </div>
+
+              <div class="palette-card" data-preset="pastel-frio">
+                <div class="palette-preview-dots">
+                  <span style="background: #EAF0F6;"></span>
+                  <span style="background: #98C1D9;"></span>
+                  <span style="background: #8ECAE6;"></span>
+                  <span style="background: #B8D8D8;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Pastel Frío</strong>
+                  <span class="palette-meta">Hielo ártico, cian glaciar y escarcha</span>
+                </div>
+              </div>
+
+              <div class="palette-card" data-preset="pastel-calido">
+                <div class="palette-preview-dots">
+                  <span style="background: #F7F2EC;"></span>
+                  <span style="background: #F5C6A5;"></span>
+                  <span style="background: #E8A0A0;"></span>
+                  <span style="background: #FFE5D9;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Pastel Cálido</strong>
+                  <span class="palette-meta">Melocotón, atardecer suave y crema</span>
+                </div>
+              </div>
+
+              <div class="palette-card" data-preset="nordico">
+                <div class="palette-preview-dots">
+                  <span style="background: #ECEEEB;"></span>
+                  <span style="background: #8DA399;"></span>
+                  <span style="background: #A4B494;"></span>
+                  <span style="background: #D8DFD5;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Nórdico</strong>
+                  <span class="palette-meta">Pizarra lino, pino musgo y madera suave</span>
+                </div>
+              </div>
+
+              <div class="palette-card" data-preset="alto-contraste">
+                <div class="palette-preview-dots">
+                  <span style="background: #FAF9F6;"></span>
+                  <span style="background: #6BAA75;"></span>
+                  <span style="background: #588B8B;"></span>
+                  <span style="background: #2D3047;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Alto Contraste Suave</strong>
+                  <span class="palette-meta">Tiza pulida y formas nítidas anti-fatiga</span>
+                </div>
+              </div>
+
+              <div class="palette-card" data-preset="sepia">
+                <div class="palette-preview-dots">
+                  <span style="background: #EFEADB;"></span>
+                  <span style="background: #D4B996;"></span>
+                  <span style="background: #C49F73;"></span>
+                  <span style="background: #9E8160;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">Sepia Relajante</strong>
+                  <span class="palette-meta">Pergamino vintage, ámbar y arcilla suave</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 14px; display: flex; justify-content: flex-end;">
+              <button id="btn-reset-palette" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;">Restaurar por Defecto</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Créditos -->
+    <div class="modal-overlay" id="credits-modal">
+      <div class="modal-card credits-card">
+        <div class="modal-header">
+          <h2 class="modal-title heading">Créditos de BeltFlow</h2>
+          <button class="modal-close-btn" id="btn-close-credits" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body credits-body">
+          <div class="credits-section">
+            <span class="credits-role">Concepto & Automatización</span>
+            <span class="credits-name">Inspirado en la elegancia minimalista de Shapez.io</span>
+          </div>
+          <div class="credits-section">
+            <span class="credits-role">Diseño Visual & Anti-Fatiga</span>
+            <span class="credits-name">Paletas pastel ergonómicas, doble capa de sombras y micro-biseles</span>
+          </div>
+          <div class="credits-section">
+            <span class="credits-role">Diseño Sonoro Acústico</span>
+            <span class="credits-name">Web Audio API pura: tonos de madera/goma relajantes sin estridencias</span>
+          </div>
+          <div class="credits-section">
+            <span class="credits-role">Motor & Renderizado</span>
+            <span class="credits-name">Vanilla JavaScript, HTML5 Canvas 2D a 60 FPS sin dependencias</span>
+          </div>
+          <div class="credits-quote">
+            "Cada cinta transportadora es un flujo de serenidad. Respira hondo, tómate tu tiempo y disfruta optimizando."
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel Hacker Oculto (Terminal de Control con Unfold) -->
+    <div class="modal-overlay" id="hacker-modal">
+      <div class="modal-card hacker-card">
+        <div class="modal-header hacker-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="hacker-badge mono">DEV_ROOT</span>
+            <h2 class="modal-title heading" style="font-size: 15px;">Terminal de Control • BeltFlow</h2>
+          </div>
+          <button class="modal-close-btn" id="btn-close-hacker" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body hacker-body">
+          <p class="hacker-intro mono">// Acceso privilegiado concedido. Elige una acción de prueba:</p>
+          
+          <div class="hacker-section">
+            <span class="hacker-section-title mono">&gt; Saltar a cualquier nivel (1 al 40):</span>
+            <div class="hacker-levels-grid" id="hacker-levels-grid">
+              <!-- Rellenado dinámicamente con botones 1 a 40 -->
+            </div>
           </div>
 
-          <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
-            <button id="btn-reset-save" class="btn btn-danger" style="font-size: 12px; padding: 6px 12px;">Reiniciar Todo el Progreso</button>
+          <div class="hacker-buttons-row">
+            <button id="hacker-btn-unlock-all" class="hacker-btn">
+              ⭐ Desbloquear Todo (40 niveles + 3★)
+            </button>
+            <button id="hacker-btn-instant-win" class="hacker-btn">
+              ⚡ Completar Nivel Actual
+            </button>
           </div>
         </div>
       </div>

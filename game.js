@@ -27,12 +27,15 @@ export class SaveManager {
       nivelActual: 1,
       nivelesCompletados: [],
       mejoresTiempos: {},
+      estrellas: {},
       config: {
         modoOscuro: false,
         zoom: 1.0,
         tipoDispositivo: 'auto',
         reducirMovimiento: false,
-        sonido: true
+        sonido: true,
+        volumen: 0.8,
+        palettePreset: 'suave'
       },
       construcciones: {}
     };
@@ -49,6 +52,7 @@ export class SaveManager {
         config: { ...SaveManager.getDefaultSave().config, ...(parsed.config || {}) },
         construcciones: parsed.construcciones || {},
         mejoresTiempos: parsed.mejoresTiempos || {},
+        estrellas: parsed.estrellas || {},
         nivelesCompletados: parsed.nivelesCompletados || []
       };
     } catch (e) {
@@ -82,6 +86,10 @@ export class AudioManager {
   constructor() {
     this.ctx = null;
     this.enabled = true;
+    this.volume = 0.8;
+    this.masterGain = null;
+    this.beltChainPitch = 1.0;
+    this.lastPlafTime = 0;
   }
 
   init() {
@@ -89,10 +97,22 @@ export class AudioManager {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+        this.masterGain.connect(this.ctx.destination);
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
+    }
+  }
+
+  setVolume(vol) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    if (this.masterGain && this.ctx) {
+      try {
+        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      } catch (e) {}
     }
   }
 
@@ -114,12 +134,12 @@ export class AudioManager {
       gNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
       osc.connect(gNode);
-      gNode.connect(this.ctx.destination);
+      gNode.connect(this.masterGain || this.ctx.destination);
 
       osc.start(now);
       osc.stop(now + duration);
     } catch (e) {
-      // Audio seguro, silenciar excepciones en entornos restringidos
+      // Audio seguro
     }
   }
 
@@ -137,8 +157,7 @@ export class AudioManager {
       const gain = this.ctx.createGain();
 
       osc.type = 'triangle';
-      // Descenso de tono suave tipo madera/goma relajante
-      const baseFreq = 210 + (Math.random() * 24 - 12);
+      const baseFreq = 210 + (Math.random() * 20 - 10);
       osc.frequency.setValueAtTime(baseFreq, now);
       osc.frequency.exponentialRampToValueAtTime(115, now + 0.05);
 
@@ -146,11 +165,49 @@ export class AudioManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain || this.ctx.destination);
 
       osc.start(now);
       osc.stop(now + 0.07);
     } catch (e) {}
+  }
+
+  playChainPlaf() {
+    if (!this.enabled) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastPlafTime < 118) return; // Limitador suave ~118ms
+    this.lastPlafTime = nowMs;
+
+    this.init();
+    if (!this.ctx) return;
+
+    try {
+      const audioNow = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      const currentPitch = this.beltChainPitch || 1.0;
+      const baseFreq = (205 + (Math.random() * 12 - 6)) * currentPitch;
+      osc.frequency.setValueAtTime(baseFreq, audioNow);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(70, baseFreq * 0.58), audioNow + 0.05);
+
+      gain.gain.setValueAtTime(0.045, audioNow);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioNow + 0.065);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain || this.ctx.destination);
+
+      osc.start(audioNow);
+      osc.stop(audioNow + 0.07);
+
+      // Subida sutil ascendente de frecuencia (+4.5% por cinta consecutiva)
+      this.beltChainPitch = Math.min(1.85, currentPitch * 1.045);
+    } catch (e) {}
+  }
+
+  resetChainPitch() {
+    this.beltChainPitch = 1.0;
   }
 
   playDelete() {
@@ -162,11 +219,11 @@ export class AudioManager {
   }
 
   playError() {
-    this.playTone(196.00, 'triangle', 0.18, 0.045); // Tono bajo suave para error
+    this.playTone(196.00, 'triangle', 0.18, 0.045); // G3 suave
   }
 
   playStreak() {
-    const chord = [587.33, 739.99, 880.00, 1174.66]; // D5, F#5, A5, D6 alegre y sutil
+    const chord = [587.33, 739.99, 880.00, 1174.66]; // D5, F#5, A5, D6
     chord.forEach((freq, i) => {
       setTimeout(() => this.playTone(freq, 'sine', 0.22, 0.035), i * 65);
     });
@@ -175,6 +232,25 @@ export class AudioManager {
   playDelivery() {
     this.playTone(659.25, 'sine', 0.22, 0.07); // E5
     setTimeout(() => this.playTone(880.00, 'sine', 0.28, 0.05), 65); // A5
+  }
+
+  playStarPop(index = 0) {
+    if (!this.enabled) return;
+    this.init();
+    const freqs = [523.25, 659.25, 783.99]; // C5, E5, G5
+    const f = freqs[index] || 523.25;
+    this.playTone(f, 'triangle', 0.28, 0.07, 0.015);
+    setTimeout(() => {
+      this.playTone(f * 1.5, 'sine', 0.22, 0.035, 0.01);
+    }, 45);
+  }
+
+  playHackerChime() {
+    if (!this.enabled) return;
+    const notes = [440, 554.37, 659.25, 880];
+    notes.forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'sine', 0.26, 0.045), i * 65);
+    });
   }
 
   playVictory() {
@@ -402,6 +478,7 @@ export class Grid {
   constructor(size = 32) {
     this.size = size;
     this.cells = new Map();
+    this.mines = new Map(); // Depósitos fijos de recursos por nivel
   }
 
   key(x, y) {
@@ -414,6 +491,22 @@ export class Grid {
 
   set(x, y, piece) {
     this.cells.set(this.key(x, y), piece);
+  }
+
+  getMine(x, y) {
+    return this.mines.get(this.key(x, y)) || null;
+  }
+
+  setMine(x, y, mine) {
+    this.mines.set(this.key(x, y), mine);
+  }
+
+  hasMine(x, y) {
+    return this.mines.has(this.key(x, y));
+  }
+
+  getAllMines() {
+    return Array.from(this.mines.values());
   }
 
   remove(x, y) {
@@ -456,13 +549,18 @@ export class Grid {
     if (!Array.isArray(piecesList)) return;
     for (const p of piecesList) {
       if (!this.get(p.x, p.y)) {
+        let shape = p.shape || null;
+        if (p.type === 'extractor' && !shape) {
+          const m = this.getMine(p.x, p.y);
+          if (m) shape = Shapes.clone(m.shape);
+        }
         this.set(p.x, p.y, {
           x: p.x,
           y: p.y,
           type: p.type,
           dir: p.dir,
           color: p.color || null,
-          shape: p.shape || null,
+          shape: shape,
           fixed: false
         });
       }
@@ -480,20 +578,41 @@ export class Simulation {
     this.items = [];
     this.nextItemId = 1;
     this.spawnerTimers = new Map();
+    this.machineAnims = [];
   }
 
   reset() {
     this.items = [];
     this.spawnerTimers.clear();
+    this.machineAnims = [];
+  }
+
+  triggerMachineAnim(x, y, type, data = {}) {
+    this.machineAnims.push({
+      x,
+      y,
+      type,
+      startTime: performance.now(),
+      duration: data.duration || 320,
+      data
+    });
   }
 
   update(dt, speedMult = 1.0) {
     const effectiveDt = dt * speedMult;
     const beltSpeed = 1.5; // Celdas por segundo
 
-    // 1. Spawners / Extractores: generar formas
+    // Limpiar micro-animaciones expiradas
+    const nowMs = performance.now();
+    for (let k = this.machineAnims.length - 1; k >= 0; k--) {
+      if (nowMs - this.machineAnims[k].startTime > this.machineAnims[k].duration) {
+        this.machineAnims.splice(k, 1);
+      }
+    }
+
+    // 1. Extractores y Spawners: generar formas desde las minas
     for (const piece of this.grid.getAllPieces()) {
-      if (piece.type === 'spawner' && piece.shape) {
+      if ((piece.type === 'extractor' || piece.type === 'spawner') && piece.shape) {
         const key = this.grid.key(piece.x, piece.y);
         let timer = (this.spawnerTimers.get(key) || 0) + effectiveDt;
 
@@ -509,6 +628,10 @@ export class Simulation {
             const isBlocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
             if (!isBlocked) {
               this.spawnItem(Shapes.clone(piece.shape), outX, outY, piece.dir);
+              this.triggerMachineAnim(piece.x, piece.y, 'extractor_pulse', {
+                dir: piece.dir,
+                color: piece.shape.left ? piece.shape.left.color : null
+              });
             }
           }
         }
@@ -526,19 +649,23 @@ export class Simulation {
         continue;
       }
 
-      // Trituradora: desintegra la forma suavemente
+      // Trituradora: desintegra la forma suavemente con partículas pastel
       if (piece.type === 'trash') {
         item.progress += effectiveDt * 2.2;
         if (item.progress >= 1.0) {
+          this.triggerMachineAnim(piece.x, piece.y, 'trash_shrink', {
+            color: item.shape && item.shape.left ? item.shape.left.color : 'coral'
+          });
           this.items.splice(i, 1);
         }
         continue;
       }
 
-      // Salida / Delivery
+      // Salida / Delivery: latido y recepción
       if (piece.type === 'delivery') {
         item.progress += effectiveDt * 3.0;
         if (item.progress >= 0.8) {
+          this.triggerMachineAnim(piece.x, piece.y, 'delivery_pulse', {});
           if (this.onDelivery) this.onDelivery(item.shape, piece);
           this.items.splice(i, 1);
         }
@@ -585,9 +712,9 @@ export class Simulation {
               const other = this.items[otherIdx];
               const combined = Shapes.mix(item.shape, other.shape);
               this.items.splice(otherIdx, 1);
-              // Si el índice del elemento actual se vio afectado al eliminar el otro
               const currentIdx = this.items.indexOf(item);
               if (currentIdx !== -1) this.items.splice(currentIdx, 1);
+              this.triggerMachineAnim(piece.x, piece.y, 'mixer_spin', { dir: piece.dir });
               this.spawnItem(combined, outX, outY, piece.dir);
               continue;
             } else if (item.processingTimer > 1.8 && item.shape.left && item.shape.right) {
@@ -667,7 +794,7 @@ export class Simulation {
 
   canAcceptItem(piece, incomingDir) {
     if (!piece) return false;
-    if (piece.type === 'obstacle' || piece.type === 'spawner') return false;
+    if (piece.type === 'obstacle' || piece.type === 'spawner' || piece.type === 'extractor') return false;
     if (piece.type === 'trash' || piece.type === 'delivery') return true;
 
     // Cinta transportadora
@@ -708,6 +835,10 @@ export class Simulation {
       if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
         const blocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
         if (!blocked) {
+          this.triggerMachineAnim(piece.x, piece.y, 'painter_drop', {
+            color: paintColor,
+            dir: piece.dir
+          });
           this.spawnItem(paintedShape, outX, outY, piece.dir);
           return true;
         }
@@ -735,6 +866,7 @@ export class Simulation {
       const canRight = !rightHalf || (rPiece && this.canAcceptItem(rPiece, rightDir) && !this.items.some(it => it.x === rX && it.y === rY && it.progress < 0.35));
 
       if (canLeft && canRight) {
+        this.triggerMachineAnim(piece.x, piece.y, 'cutter_flash', { dir: piece.dir });
         if (leftHalf && fPiece) this.spawnItem(leftHalf, fX, fY, piece.dir);
         if (rightHalf && rPiece) this.spawnItem(rightHalf, rX, rY, rightDir);
         return true;
@@ -881,6 +1013,11 @@ export class Renderer {
   }
 
   render(dt, speedMult = 1.0) {
+    if (this.game && this.game.state === 'menu') {
+      this.renderDemoScreensaver(this.ctx, dt);
+      return;
+    }
+
     this.beltAnimOffset = (this.beltAnimOffset + dt * 1.5 * speedMult) % 1.0;
 
     const ctx = this.ctx;
@@ -893,6 +1030,7 @@ export class Renderer {
     ctx.scale(this.zoom, this.zoom);
 
     this.drawGrid(ctx);
+    this.drawMines(ctx);
     this.drawTunnelGuides(ctx);
 
     for (const piece of this.grid.getAllPieces()) {
@@ -904,6 +1042,7 @@ export class Renderer {
     }
 
     this.drawItems(ctx);
+    this.drawMachineAnims(ctx);
 
     // Ondas y destellos de impacto de colocación ("plaf")
     this.drawPlacementEffects(ctx);
@@ -914,6 +1053,105 @@ export class Renderer {
     ctx.restore();
 
     this.drawParticles(ctx, dt);
+  }
+
+  renderDemoScreensaver(ctx, dt) {
+    this.beltAnimOffset = (this.beltAnimOffset + dt * 1.3) % 1.0;
+    if (this.game && this.game.demoSim) {
+      this.game.demoSim.update(dt, 1.0);
+    }
+
+    ctx.fillStyle = this.isDark ? '#1B1F24' : '#F2F0EB';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+
+    // En pantallas grandes (>768px), centrar en el 70% derecho; en móviles centrar abajo
+    const isDesktop = this.width > 768;
+    const centerX = isDesktop ? (this.width * 0.32 + this.width * 0.68 / 2) : (this.width / 2);
+    const centerY = isDesktop ? (this.height / 2) : (this.height * 0.65);
+    const demoZoom = Math.min(1.25, Math.max(0.75, (isDesktop ? this.width * 0.65 : this.width) / 520));
+
+    ctx.translate(centerX, centerY);
+    ctx.scale(demoZoom, demoZoom);
+    // Centrar en el punto medio del circuito de demo (x: 4.5, y: 2.5)
+    ctx.translate(-4.5 * this.tileSize, -2.5 * this.tileSize);
+
+    // Cuadrícula sutil
+    const dotColor = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    ctx.fillStyle = dotColor;
+    for (let x = 0; x <= 9; x++) {
+      for (let y = 0; y <= 5; y++) {
+        ctx.beginPath();
+        ctx.arc(x * this.tileSize + this.tileSize / 2, y * this.tileSize + this.tileSize / 2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (this.game && this.game.demoGrid) {
+      this.drawMines(ctx, this.game.demoGrid);
+      for (const piece of this.game.demoGrid.getAllPieces()) {
+        this.drawPiece(ctx, piece);
+      }
+    }
+
+    if (this.game && this.game.demoSim) {
+      this.drawItems(ctx, this.game.demoSim.items);
+      this.drawMachineAnims(ctx, this.game.demoSim.machineAnims);
+    }
+
+    ctx.restore();
+    this.drawParticles(ctx, dt);
+  }
+
+  drawMines(ctx, customGrid = null) {
+    const grid = customGrid || this.grid;
+    const s = this.tileSize;
+
+    for (const mine of grid.getAllMines()) {
+      const cx = (mine.x + 0.5) * s;
+      const cy = (mine.y + 0.5) * s;
+      const colorName = (mine.shape && mine.shape.left) ? mine.shape.left.color : 'mint';
+      const hex = COLOR_HEX[colorName] || '#A8D5BA';
+
+      ctx.save();
+
+      // 1. Halo suave y difuso que pulsa sutilmente sin fatiga
+      const pulse = Math.sin(performance.now() * 0.0028 + mine.x * 3 + mine.y * 2) * 2.2;
+      const haloGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, s * 0.52 + pulse);
+      haloGrad.addColorStop(0, `${hex}4D`);
+      haloGrad.addColorStop(0.6, `${hex}1F`);
+      haloGrad.addColorStop(1, `${hex}00`);
+
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.55 + pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Base del yacimiento
+      ctx.fillStyle = this.isDark ? '#232933' : '#E8E3DA';
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.40, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Borde circular punteado relajante
+      ctx.strokeStyle = `${hex}88`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.40, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 3. Si no hay extractor colocado encima, mostrar el cristal del recurso
+      const pieceOnTop = grid.get(mine.x, mine.y);
+      if (!pieceOnTop || pieceOnTop.type !== 'extractor') {
+        ctx.translate(cx, cy);
+        Shapes.draw(ctx, mine.shape, s * 0.28, this.isDark);
+      }
+
+      ctx.restore();
+    }
   }
 
   drawPlacementEffects(ctx) {
@@ -1071,6 +1309,32 @@ export class Renderer {
     ctx.restore();
   }
 
+  // Base estética con micro-gradiente y bisel interno
+  drawTileBase(ctx, s, dark1, dark2, light1, light2, radius = 8) {
+    const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
+    if (this.isDark) {
+      grad.addColorStop(0, dark1);
+      grad.addColorStop(1, dark2);
+    } else {
+      grad.addColorStop(0, light1);
+      grad.addColorStop(1, light2);
+    }
+    ctx.fillStyle = grad;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, radius);
+      ctx.fill();
+      // Bisel interno sutil
+      ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.48)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-s / 2 + 2.5, -s / 2 + 2.5, s - 5, s - 5, radius - 1);
+      ctx.stroke();
+    } else {
+      ctx.fillRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
+    }
+  }
+
   drawPiece(ctx, piece) {
     const px = piece.x * this.tileSize;
     const py = piece.y * this.tileSize;
@@ -1107,8 +1371,9 @@ export class Renderer {
       case 'belt':
         this.renderBeltTile(ctx, piece, s);
         break;
+      case 'extractor':
       case 'spawner':
-        this.renderSpawnerTile(ctx, piece, s);
+        this.renderExtractorTile(ctx, piece, s);
         break;
       case 'trash':
         this.renderTrashTile(ctx, s);
@@ -1137,17 +1402,10 @@ export class Renderer {
   }
 
   renderBeltTile(ctx, piece, s) {
-    const bgColor = this.isDark ? '#252B33' : '#E6E1D8';
-    const trackColor = this.isDark ? '#2E3540' : '#DED8CE';
-    const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.18)';
+    this.drawTileBase(ctx, s, '#2B323D', '#222730', '#EFECE6', '#DDD8CE', 6);
 
-    ctx.fillStyle = bgColor;
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 6);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    const trackColor = this.isDark ? '#333C4A' : '#D5CFC4';
+    const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.22)';
 
     // Detectar si la cinta es una curva inspeccionando vecinos
     let isLeftCurve = false;
@@ -1259,25 +1517,17 @@ export class Renderer {
         ctx.beginPath();
         ctx.moveTo(x - 5, -s * 0.18);
         ctx.lineTo(x + 2, 0);
-        ctx.lineTo(-s * 0.18, 0);
-        ctx.moveTo(x - 5, -s * 0.18);
-        ctx.lineTo(x + 2, 0);
         ctx.lineTo(x - 5, s * 0.18);
         ctx.stroke();
       }
     }
   }
 
-  renderSpawnerTile(ctx, piece, s) {
-    ctx.fillStyle = this.isDark ? '#2B323D' : '#E2DFD6';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+  renderExtractorTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#323B47', '#252B35', '#F5F2EB', '#DDD8CD', 8);
 
-    ctx.fillStyle = this.isDark ? '#A8D5BA' : '#68B084';
+    // Boquilla / Flecha de eyección al frente
+    ctx.fillStyle = this.isDark ? '#A8D5BA' : '#5CA477';
     ctx.beginPath();
     ctx.moveTo(s / 2 - 8, -6);
     ctx.lineTo(s / 2 - 2, 0);
@@ -1285,19 +1535,23 @@ export class Renderer {
     ctx.closePath();
     ctx.fill();
 
+    // Cámara cilíndrica central de extracción
+    ctx.fillStyle = this.isDark ? 'rgba(0, 0, 0, 0.32)' : 'rgba(255, 255, 255, 0.65)';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
     if (piece.shape) {
-      Shapes.draw(ctx, piece.shape, s * 0.28, this.isDark);
+      Shapes.draw(ctx, piece.shape, s * 0.25, this.isDark);
     }
   }
 
   renderTrashTile(ctx, s) {
-    ctx.fillStyle = this.isDark ? '#382A2E' : '#F5DCDA';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#3E2D33', '#2C2024', '#F8E2E0', '#ECD0CD', 8);
 
     ctx.strokeStyle = '#E8A0A0';
     ctx.lineWidth = 2.4;
@@ -1316,13 +1570,7 @@ export class Renderer {
   }
 
   renderCutterTile(ctx, s) {
-    ctx.fillStyle = this.isDark ? '#26303B' : '#DFE9F2';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#2B3744', '#202933', '#E6EEF5', '#CFDFED', 8);
 
     ctx.strokeStyle = '#A9CCE3';
     ctx.lineWidth = 2.6;
@@ -1349,13 +1597,7 @@ export class Renderer {
 
   renderPainterTile(ctx, piece, s) {
     const colorHex = COLOR_HEX[piece.color || 'lavender'];
-    ctx.fillStyle = this.isDark ? '#2E2838' : '#ECE5F5';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#352C3E', '#261F2E', '#F1EBF7', '#E0D4EC', 8);
 
     ctx.fillStyle = colorHex;
     ctx.beginPath();
@@ -1375,13 +1617,7 @@ export class Renderer {
   }
 
   renderMixerTile(ctx, s) {
-    ctx.fillStyle = this.isDark ? '#352D26' : '#F7EBDC';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#3C3229', '#2C241D', '#FBF0E2', '#EDDFCD', 8);
 
     ctx.strokeStyle = '#F5C6A5';
     ctx.lineWidth = 2.4;
@@ -1400,13 +1636,7 @@ export class Renderer {
   }
 
   renderTunnelTile(ctx, s) {
-    ctx.fillStyle = this.isDark ? '#262D2C' : '#DFEDE6';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#2B3534', '#1E2625', '#E5F1EB', '#D3E4DC', 8);
 
     ctx.fillStyle = this.isDark ? '#14181B' : '#33373D';
     ctx.beginPath();
@@ -1416,13 +1646,7 @@ export class Renderer {
   }
 
   renderDeliveryTile(ctx, s) {
-    ctx.fillStyle = this.isDark ? '#243329' : '#DCF0E2';
-    if (ctx.roundRect) {
-      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 10);
-    } else {
-      ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
-    }
-    ctx.fill();
+    this.drawTileBase(ctx, s, '#293A2E', '#1C2920', '#E2F4E7', '#CDE9D5', 10);
 
     ctx.strokeStyle = '#A8D5BA';
     ctx.lineWidth = 2.2;
@@ -1444,11 +1668,10 @@ export class Renderer {
   }
 
   drawGhost(ctx, ghost) {
-    // En modo Vista no se muestra la previsualización de colocación
     if (this.game && this.game.mode === 'view') return;
 
     ctx.save();
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = ghost.valid ? 0.65 : 0.35;
 
     if (ghost.type === 'erase') {
       const s = this.tileSize;
@@ -1456,25 +1679,40 @@ export class Renderer {
       const py = ghost.y * s;
       ctx.fillStyle = '#E8A0A0';
       if (ctx.roundRect) {
+        ctx.beginPath();
         ctx.roundRect(px + 2, py + 2, s - 4, s - 4, 6);
+        ctx.fill();
       } else {
         ctx.fillRect(px + 2, py + 2, s - 4, s - 4);
       }
     } else {
-      // drawPiece ya calcula la posición de mundo (piece.x + 0.5) * s y rota piece.dir
+      if (!ghost.valid && ghost.type === 'extractor') {
+        // Indicador rojo translúcido si se intenta poner un extractor sin mina
+        const s = this.tileSize;
+        ctx.fillStyle = 'rgba(232, 160, 160, 0.38)';
+        ctx.strokeStyle = '#E8A0A0';
+        ctx.lineWidth = 1.5;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(ghost.x * s + 2, ghost.y * s + 2, s - 4, s - 4, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
       this.drawPiece(ctx, ghost);
     }
 
     ctx.restore();
   }
 
-  drawItems(ctx) {
+  drawItems(ctx, customItems = null) {
     const s = this.tileSize;
+    const items = customItems || this.sim.items;
 
-    for (const item of this.sim.items) {
+    for (const item of items) {
       if (item.isUnderground) continue;
 
-      const piece = this.grid.get(item.x, item.y);
+      const piece = (customItems && this.game.demoGrid) ? this.game.demoGrid.get(item.x, item.y) : this.grid.get(item.x, item.y);
       if (!piece) continue;
 
       const cx = (item.x + 0.5) * s;
@@ -1511,8 +1749,28 @@ export class Renderer {
         drawY = oneMinusT * oneMinusT * p0y + 2 * oneMinusT * t * pcy + t * t * p1y;
       }
 
+      // Micro-vibración sutil anti-fatiga ("rodando")
+      const jitter = Math.sin(performance.now() * 0.016 + item.id * 11) * 0.55;
+      const moveAngle = (outDir || 0) * (Math.PI / 2);
+      drawX += Math.cos(moveAngle + Math.PI / 2) * jitter;
+      drawY += Math.sin(moveAngle + Math.PI / 2) * jitter;
+
       ctx.save();
       ctx.translate(drawX, drawY);
+
+      // Centrifugado / bob en curvas
+      if (inDir !== outDir && piece.type === 'belt') {
+        const bob = Math.sin(item.progress * Math.PI) * 0.12;
+        ctx.scale(1 + bob, 1 - bob * 0.5);
+        ctx.rotate((item.progress - 0.5) * 0.22);
+      }
+
+      // Desvanecimiento suave en túnel
+      if (piece.type === 'tunnel') {
+        if (!item.isUnderground && item.progress < 0.6) {
+          ctx.globalAlpha = Math.max(0, 1.0 - item.progress * 1.6);
+        }
+      }
 
       let scale = 1.0;
       if (piece.type === 'trash') {
@@ -1524,6 +1782,105 @@ export class Renderer {
       }
 
       Shapes.draw(ctx, item.shape, s * 0.32, this.isDark);
+      ctx.restore();
+    }
+  }
+
+  drawMachineAnims(ctx, animList = null) {
+    const list = animList || (this.sim ? this.sim.machineAnims : null);
+    if (!list || list.length === 0 || this.reducedMotion) return;
+
+    const s = this.tileSize;
+    const nowMs = performance.now();
+
+    for (const anim of list) {
+      const elapsed = nowMs - anim.startTime;
+      if (elapsed < 0 || elapsed > anim.duration) continue;
+      const t = elapsed / anim.duration;
+      const cx = (anim.x + 0.5) * s;
+      const cy = (anim.y + 0.5) * s;
+
+      ctx.save();
+
+      switch (anim.type) {
+        case 'extractor_pulse': {
+          // Pulso rítmico + emisión
+          const delta = DIR_DELTA[anim.data.dir !== undefined ? anim.data.dir : 0];
+          const dist = t * s * 0.45;
+          ctx.strokeStyle = this.isDark ? `rgba(168, 213, 186, ${0.75 * (1 - t)})` : `rgba(87, 158, 114, ${0.75 * (1 - t)})`;
+          ctx.lineWidth = 2.2 * (1 - t);
+          ctx.beginPath();
+          ctx.arc(cx + delta.x * dist, cy + delta.y * dist, 5 + 14 * t, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+
+        case 'cutter_flash': {
+          // Mini flash horizontal y separación suave
+          ctx.translate(cx, cy);
+          ctx.rotate((anim.data.dir !== undefined ? anim.data.dir : 0) * (Math.PI / 2));
+          ctx.strokeStyle = `rgba(169, 204, 227, ${0.85 * (1 - t)})`;
+          ctx.lineWidth = 3.6 * (1 - t);
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.4, 0);
+          ctx.lineTo(s * 0.4, 0);
+          ctx.stroke();
+          break;
+        }
+
+        case 'painter_drop': {
+          // Gota animada cayendo + salpicadura translúcida
+          const pCol = COLOR_HEX[anim.data.color || 'lavender'] || '#C9B6E4';
+          ctx.strokeStyle = pCol;
+          ctx.globalAlpha = 0.65 * (1 - t);
+          ctx.lineWidth = 2.2 * (1 - t);
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6 + 14 * t, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+
+        case 'mixer_spin': {
+          // Órbita de convergencia y giro 180°
+          const angle = t * Math.PI;
+          const r = (1 - t) * s * 0.28;
+          ctx.fillStyle = '#F5C6A5';
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, 3.2 * (1 - t * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(cx - Math.cos(angle) * r, cy - Math.sin(angle) * r, 3.2 * (1 - t * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+
+        case 'trash_shrink': {
+          // Desaparición con partículas pastel
+          const emberColor = COLOR_HEX[anim.data.color || 'coral'] || '#E8A0A0';
+          ctx.fillStyle = emberColor;
+          for (let k = 0; k < 4; k++) {
+            const ex = cx + Math.cos(k * 1.57) * (10 * t) + (k % 2 ? -2 : 2) * t * 6;
+            const ey = cy - 14 * t + Math.sin(k * 1.57) * 4;
+            ctx.globalAlpha = 0.7 * (1 - t);
+            ctx.beginPath();
+            ctx.arc(ex, ey, Math.max(0.5, 2.5 * (1 - t)), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        }
+
+        case 'delivery_pulse': {
+          // Latido suave + onda expansiva
+          ctx.strokeStyle = '#A8D5BA';
+          ctx.lineWidth = 2.5 * (1 - t);
+          ctx.globalAlpha = 0.65 * (1 - t);
+          ctx.beginPath();
+          ctx.arc(cx, cy, s * 0.25 + s * 0.55 * t, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+      }
+
       ctx.restore();
     }
   }
@@ -1598,6 +1955,8 @@ export class InputManager {
   }
 
   onPointerDown(e) {
+    if (this.game && this.game.state === 'menu') return;
+
     this.canvas.setPointerCapture(e.pointerId);
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1676,6 +2035,8 @@ export class InputManager {
   }
 
   onPointerMove(e) {
+    if (this.game && this.game.state === 'menu') return;
+
     if (this.activePointers.has(e.pointerId)) {
       this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
@@ -1784,6 +2145,10 @@ export class InputManager {
   }
 
   onPointerUp(e) {
+    if (this.game && this.game.audio) {
+      this.game.audio.resetChainPitch();
+    }
+
     clearTimeout(this.longPressTimer);
     this.activePointers.delete(e.pointerId);
 
@@ -1792,6 +2157,8 @@ export class InputManager {
     }
 
     this.canvas.classList.remove('grabbing');
+
+    if (this.game && this.game.state === 'menu') return;
 
     if (this.activePointers.size === 0) {
       const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
@@ -1820,6 +2187,7 @@ export class InputManager {
   }
 
   onWheel(e) {
+    if (this.game && this.game.state === 'menu') return;
     e.preventDefault();
     if (e.ctrlKey || Math.abs(e.deltaY) > 40) {
       const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
@@ -1831,6 +2199,13 @@ export class InputManager {
   }
 
   onKeyDown(e) {
+    if (this.game && this.game.state === 'menu') {
+      if (e.key === ' ' || e.key === 'Enter') {
+        this.game.startGameFromMenu();
+      }
+      return;
+    }
+
     // Tecla Q para alternar entre Modo Vista y Modo Edición
     if (e.key === 'q' || e.key === 'Q') {
       this.game.toggleMode();
@@ -1923,20 +2298,38 @@ export class UIManager {
   constructor(game) {
     this.game = game;
     this.activeChapter = 1;
+    this.hackerClicks = 0;
+    this.lastHackerClick = 0;
     this.bindDOM();
   }
 
   bindDOM() {
-    // Alternar Modo Vista / Edición
+    // 1. Menú Principal Split-Screen
+    const btnMenuPlay = document.getElementById('menu-btn-play');
+    if (btnMenuPlay) btnMenuPlay.addEventListener('click', () => this.game.startGameFromMenu());
+
+    const btnMenuLevels = document.getElementById('menu-btn-levels');
+    if (btnMenuLevels) btnMenuLevels.addEventListener('click', () => this.toggleLevelsModal(true));
+
+    const btnMenuSettings = document.getElementById('menu-btn-settings');
+    if (btnMenuSettings) btnMenuSettings.addEventListener('click', () => this.toggleSettingsModal(true));
+
+    const btnMenuCredits = document.getElementById('menu-btn-credits');
+    if (btnMenuCredits) btnMenuCredits.addEventListener('click', () => this.toggleCreditsModal(true));
+
+    const btnBackMenu = document.getElementById('btn-back-menu');
+    if (btnBackMenu) btnBackMenu.addEventListener('click', () => this.game.openMainMenu());
+
+    // 2. HUD y controles de juego
     const btnMode = document.getElementById('btn-mode-toggle');
     if (btnMode) btnMode.addEventListener('click', () => this.game.toggleMode());
 
     const btnFabMode = document.getElementById('btn-fab-mode');
     if (btnFabMode) btnFabMode.addEventListener('click', () => this.game.toggleMode());
 
-    document.getElementById('btn-pause').addEventListener('click', () => this.game.togglePause());
-    document.getElementById('btn-speed').addEventListener('click', () => this.game.cycleSpeed());
-    document.getElementById('btn-restart-level').addEventListener('click', () => this.game.restartCurrentLevel());
+    document.getElementById('btn-pause')?.addEventListener('click', () => this.game.togglePause());
+    document.getElementById('btn-speed')?.addEventListener('click', () => this.game.cycleSpeed());
+    document.getElementById('btn-restart-level')?.addEventListener('click', () => this.game.restartCurrentLevel());
 
     // Botón reiniciar mapa (limpiar piezas colocadas)
     const btnClearMap = document.getElementById('btn-clear-map');
@@ -1967,47 +2360,150 @@ export class UIManager {
       });
     }
 
-    document.getElementById('btn-levels-modal').addEventListener('click', () => this.toggleLevelsModal(true));
-    document.getElementById('btn-sound-toggle').addEventListener('click', () => this.game.toggleSound());
-    document.getElementById('btn-theme-toggle').addEventListener('click', () => this.game.toggleTheme());
-    document.getElementById('btn-settings').addEventListener('click', () => this.toggleSettingsModal(true));
+    document.getElementById('btn-levels-modal')?.addEventListener('click', () => this.toggleLevelsModal(true));
+    document.getElementById('btn-sound-toggle')?.addEventListener('click', () => this.game.toggleSound());
+    document.getElementById('btn-theme-toggle')?.addEventListener('click', () => this.game.toggleTheme());
+    document.getElementById('btn-settings')?.addEventListener('click', () => this.toggleSettingsModal(true));
 
-    document.getElementById('btn-close-levels').addEventListener('click', () => this.toggleLevelsModal(false));
-    document.getElementById('btn-close-settings').addEventListener('click', () => this.toggleSettingsModal(false));
-    document.getElementById('btn-replay-level').addEventListener('click', () => {
+    document.getElementById('btn-close-levels')?.addEventListener('click', () => this.toggleLevelsModal(false));
+    document.getElementById('btn-close-settings')?.addEventListener('click', () => this.toggleSettingsModal(false));
+    document.getElementById('btn-close-credits')?.addEventListener('click', () => this.toggleCreditsModal(false));
+    document.getElementById('btn-close-hacker')?.addEventListener('click', () => this.toggleHackerModal(false));
+
+    document.getElementById('btn-replay-level')?.addEventListener('click', () => {
       this.toggleVictoryModal(false);
       this.game.restartCurrentLevel();
     });
-    document.getElementById('btn-next-level').addEventListener('click', () => {
+    document.getElementById('btn-next-level')?.addEventListener('click', () => {
       this.toggleVictoryModal(false);
       this.game.loadNextLevel();
     });
-    document.getElementById('btn-reset-save').addEventListener('click', () => {
+    document.getElementById('btn-reset-save')?.addEventListener('click', () => {
       if (confirm("¿Estás seguro de que deseas reiniciar todo el progreso y las mejores marcas guardadas?")) {
         this.game.resetAllProgress();
       }
     });
 
+    // 3. Pestañas de Ajustes: Juego vs Estética
+    const tabCfgGame = document.getElementById('tab-cfg-game');
+    const tabCfgAesthetic = document.getElementById('tab-cfg-aesthetic');
+    const panelCfgGame = document.getElementById('panel-cfg-game');
+    const panelCfgAesthetic = document.getElementById('panel-cfg-aesthetic');
+
+    if (tabCfgGame && tabCfgAesthetic) {
+      tabCfgGame.addEventListener('click', () => {
+        tabCfgGame.classList.add('active');
+        tabCfgAesthetic.classList.remove('active');
+        if (panelCfgGame) panelCfgGame.style.display = 'block';
+        if (panelCfgAesthetic) panelCfgAesthetic.style.display = 'none';
+      });
+      tabCfgAesthetic.addEventListener('click', () => {
+        tabCfgAesthetic.classList.add('active');
+        tabCfgGame.classList.remove('active');
+        if (panelCfgAesthetic) panelCfgAesthetic.style.display = 'block';
+        if (panelCfgGame) panelCfgGame.style.display = 'none';
+      });
+    }
+
+    // Slider de volumen general
+    const volSlider = document.getElementById('setting-volume-slider');
+    const volVal = document.getElementById('setting-volume-val');
+    if (volSlider) {
+      volSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (volVal) volVal.textContent = `${val}%`;
+        this.game.setVolume(val / 100);
+      });
+    }
+
+    // Selector de paletas de color en tiempo real
+    const paletteCards = document.querySelectorAll('.palette-card[data-preset]');
+    paletteCards.forEach(card => {
+      card.addEventListener('click', () => {
+        const preset = card.dataset.preset;
+        this.game.setPalettePreset(preset);
+      });
+    });
+
+    const btnResetPalette = document.getElementById('btn-reset-palette');
+    if (btnResetPalette) {
+      btnResetPalette.addEventListener('click', () => {
+        this.game.setPalettePreset('suave');
+      });
+    }
+
+    // Configuración estándar
     const darkInput = document.getElementById('setting-darkmode');
-    darkInput.addEventListener('change', (e) => this.game.setTheme(e.target.checked));
+    if (darkInput) darkInput.addEventListener('change', (e) => this.game.setTheme(e.target.checked));
 
     const ctrlSelect = document.getElementById('setting-controls-mode');
-    ctrlSelect.addEventListener('change', (e) => this.game.setControlsMode(e.target.value));
+    if (ctrlSelect) ctrlSelect.addEventListener('change', (e) => this.game.setControlsMode(e.target.value));
 
     const motionInput = document.getElementById('setting-reduced-motion');
-    motionInput.addEventListener('change', (e) => this.game.setReducedMotion(e.target.checked));
+    if (motionInput) motionInput.addEventListener('change', (e) => this.game.setReducedMotion(e.target.checked));
 
-    document.getElementById('btn-fab-rotate').addEventListener('click', () => this.game.rotatePlacement());
-    document.getElementById('btn-fab-erase').addEventListener('click', () => {
+    // 4. Panel Hacker Secreto: Activación con 8 clics rápidos en la 3ª letra ('l')
+    const hackerTrigger = document.getElementById('hacker-trigger');
+    if (hackerTrigger) {
+      hackerTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const now = performance.now();
+        if (now - this.lastHackerClick < 400) {
+          this.hackerClicks++;
+        } else {
+          this.hackerClicks = 1;
+        }
+        this.lastHackerClick = now;
+
+        if (this.hackerClicks >= 8) {
+          this.hackerClicks = 0;
+          this.game.audio.playHackerChime();
+          this.toggleHackerModal(true);
+        }
+      });
+    }
+
+    const hackerUnlockAll = document.getElementById('hacker-btn-unlock-all');
+    if (hackerUnlockAll) {
+      hackerUnlockAll.addEventListener('click', () => {
+        for (let i = 1; i <= 40; i++) {
+          if (!this.game.saveData.nivelesCompletados.includes(i)) {
+            this.game.saveData.nivelesCompletados.push(i);
+          }
+          this.game.saveData.estrellas[i] = 3;
+        }
+        this.game.autoSave();
+        this.populateLevelsGrid();
+        this.updateMenuStats();
+        this.showToast("⭐ ¡Todos los 40 niveles desbloqueados con 3 estrellas!", 2500);
+        this.toggleHackerModal(false);
+      });
+    }
+
+    const hackerInstantWin = document.getElementById('hacker-btn-instant-win');
+    if (hackerInstantWin) {
+      hackerInstantWin.addEventListener('click', () => {
+        this.toggleHackerModal(false);
+        if (this.game.state === 'menu') {
+          this.game.startGameFromMenu();
+        }
+        this.game.timeElapsed = Math.max(1, (this.game.currentLevel?.stars?.gold || 15) - 2);
+        this.game.completeLevel();
+      });
+    }
+
+    // 5. Botones flotantes y herramientas
+    document.getElementById('btn-fab-rotate')?.addEventListener('click', () => this.game.rotatePlacement());
+    document.getElementById('btn-fab-erase')?.addEventListener('click', () => {
       if (this.game.selectedTool === 'erase') {
         this.game.selectTool('belt');
       } else {
         this.game.selectTool('erase');
       }
     });
-    document.getElementById('btn-fab-center').addEventListener('click', () => this.game.centerCameraOnLevel());
-    document.getElementById('btn-fab-zoomin').addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 1.2));
-    document.getElementById('btn-fab-zoomout').addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 0.8));
+    document.getElementById('btn-fab-center')?.addEventListener('click', () => this.game.centerCameraOnLevel());
+    document.getElementById('btn-fab-zoomin')?.addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 1.2));
+    document.getElementById('btn-fab-zoomout')?.addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 0.8));
 
     const toolCards = document.querySelectorAll('.tool-card');
     toolCards.forEach(card => {
@@ -2029,6 +2525,7 @@ export class UIManager {
   }
 
   updateLevelInfo(level, demands = null) {
+    if (!level) return;
     document.getElementById('level-tag').textContent = `Nivel ${level.id}`;
     document.getElementById('level-title').textContent = level.name;
     document.getElementById('hint-text').textContent = level.hint || level.description;
@@ -2069,7 +2566,7 @@ export class UIManager {
 
     const totalQuota = demands ? demands.reduce((acc, d) => acc + d.quota, 0) : level.quota;
     this.updateQuota(0, totalQuota, demands);
-    this.updateAvailableTools(level.availableTools || ['belt']);
+    this.updateAvailableTools(level.availableTools || ['belt', 'extractor']);
   }
 
   updateQuota(delivered, quota, demands = null) {
@@ -2183,6 +2680,8 @@ export class UIManager {
 
   toggleVictoryModal(show, data = {}) {
     const modal = document.getElementById('victory-modal');
+    if (!modal) return;
+
     if (show) {
       document.getElementById('victory-time').textContent = data.time || '00:00';
       document.getElementById('victory-best').textContent = data.best || '00:00';
@@ -2190,7 +2689,57 @@ export class UIManager {
       if (precEl) precEl.textContent = data.precision || '100%';
       const delEl = document.getElementById('victory-delivered');
       if (delEl) delEl.textContent = data.delivered || '--';
+
+      const starsEarned = data.starsEarned || 1;
+      const starsConfig = data.starsConfig || { gold: 30, silver: 60, bronze: 120 };
+
+      // Resetear estrellas
+      const star1 = document.getElementById('victory-star-1');
+      const star2 = document.getElementById('victory-star-2');
+      const star3 = document.getElementById('victory-star-3');
+      [star1, star2, star3].forEach(s => s && s.classList.remove('popped'));
+
+      // Indicadores de tiempo objetivo
+      const bGold = document.getElementById('bench-gold');
+      const bSilver = document.getElementById('bench-silver');
+      const bBronze = document.getElementById('bench-bronze');
+      if (bGold) {
+        bGold.textContent = `🥇 Oro ≤ ${starsConfig.gold}s`;
+        bGold.className = `benchmark-pill ${starsEarned >= 3 ? 'active' : ''}`;
+      }
+      if (bSilver) {
+        bSilver.textContent = `🥈 Plata ≤ ${starsConfig.silver}s`;
+        bSilver.className = `benchmark-pill ${starsEarned === 2 ? 'active' : ''}`;
+      }
+      if (bBronze) {
+        bBronze.textContent = `🥉 Bronce ≤ ${starsConfig.bronze}s`;
+        bBronze.className = `benchmark-pill ${starsEarned === 1 ? 'active' : ''}`;
+      }
+
+      // Mensaje de feedback de tiempo
+      const msgEl = document.getElementById('victory-message');
+      if (msgEl) {
+        if (starsEarned === 3) {
+          msgEl.textContent = "⭐ ¡Tiempo oro conseguido! Máxima calificación de eficiencia.";
+        } else if (starsEarned === 2) {
+          const diff = (data.timeElapsed - starsConfig.gold).toFixed(1);
+          msgEl.textContent = `🥈 ¡Tiempo plata! A solo ${diff}s del objetivo oro (≤${starsConfig.gold}s).`;
+        } else {
+          const diff = (data.timeElapsed - starsConfig.silver).toFixed(1);
+          msgEl.textContent = `🥉 ¡Nivel completado! A ${diff}s del objetivo plata (≤${starsConfig.silver}s).`;
+        }
+      }
+
       modal.classList.add('active');
+
+      // Animación de pop secuencial con sonido por cada estrella
+      for (let i = 0; i < starsEarned; i++) {
+        const sEl = [star1, star2, star3][i];
+        setTimeout(() => {
+          if (sEl) sEl.classList.add('popped');
+          this.game.audio.playStarPop(i);
+        }, 260 + i * 320);
+      }
     } else {
       modal.classList.remove('active');
     }
@@ -2198,6 +2747,7 @@ export class UIManager {
 
   toggleLevelsModal(show) {
     const modal = document.getElementById('levels-modal');
+    if (!modal) return;
     if (show) {
       this.populateLevelsGrid();
       modal.classList.add('active');
@@ -2208,10 +2758,54 @@ export class UIManager {
 
   toggleSettingsModal(show) {
     const modal = document.getElementById('settings-modal');
+    if (!modal) return;
     if (show) {
       modal.classList.add('active');
     } else {
       modal.classList.remove('active');
+    }
+  }
+
+  toggleCreditsModal(show) {
+    const modal = document.getElementById('credits-modal');
+    if (!modal) return;
+    if (show) {
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  toggleHackerModal(show) {
+    const modal = document.getElementById('hacker-modal');
+    if (!modal) return;
+    if (show) {
+      this.populateHackerGrid();
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  populateHackerGrid() {
+    const grid = document.getElementById('hacker-levels-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    for (let i = 1; i <= 40; i++) {
+      const btn = document.createElement('button');
+      btn.className = `hacker-level-btn mono ${this.game.saveData.nivelActual === i ? 'current' : ''}`;
+      btn.textContent = i;
+      btn.title = `Saltar al Nivel ${i}`;
+      btn.addEventListener('click', () => {
+        this.game.loadLevel(i);
+        this.toggleHackerModal(false);
+        if (this.game.state === 'menu') {
+          this.game.startGameFromMenu();
+        }
+        this.showToast(`🚀 Salto Hacker al Nivel ${i}`, 1800);
+      });
+      grid.appendChild(btn);
     }
   }
 
@@ -2224,7 +2818,6 @@ export class UIManager {
     const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
     const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
 
-    // Actualizar estilo visual de las pestañas
     const tab1 = document.getElementById('tab-chapter-1');
     const tab2 = document.getElementById('tab-chapter-2');
     if (tab1) tab1.className = `level-tab-btn ${this.activeChapter === 1 ? 'active' : ''}`;
@@ -2248,15 +2841,25 @@ export class UIManager {
       const bestTimeSecs = save.mejoresTiempos[lvl.id];
       const timeStr = bestTimeSecs ? `${bestTimeSecs.toFixed(1)}s` : (isUnlocked ? '--' : '🔒');
 
+      const stars = (save.estrellas && save.estrellas[lvl.id]) || 0;
+      let starsHtml = '';
+      if (isUnlocked) {
+        starsHtml = `<div class="level-stars-mini">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>`;
+      }
+
       btn.innerHTML = `
         <span class="level-card-num">${lvl.id}</span>
         <span class="level-card-time">${timeStr}</span>
+        ${starsHtml}
       `;
 
       if (isUnlocked) {
         btn.addEventListener('click', () => {
           this.toggleLevelsModal(false);
           this.game.loadLevel(lvl.id);
+          if (this.game.state === 'menu') {
+            this.game.startGameFromMenu();
+          }
         });
       } else {
         btn.addEventListener('click', () => {
@@ -2272,8 +2875,31 @@ export class UIManager {
     });
   }
 
+  updateMenuStats() {
+    const summaryEl = document.getElementById('menu-stats-summary');
+    const playBtn = document.getElementById('menu-btn-play');
+    if (!summaryEl || !this.game || !this.game.saveData) return;
+
+    const save = this.game.saveData;
+    const completedCount = (save.nivelesCompletados || []).length;
+    let totalStars = 0;
+    if (save.estrellas) {
+      Object.values(save.estrellas).forEach(s => totalStars += (s || 0));
+    }
+
+    summaryEl.textContent = `Nivel ${save.nivelActual || 1} · ${completedCount}/40 Completados · ${totalStars} ★`;
+
+    if (playBtn) {
+      const titleEl = playBtn.querySelector('.menu-btn-title');
+      const descEl = playBtn.querySelector('.menu-btn-desc');
+      if (titleEl) titleEl.textContent = completedCount > 0 ? "Continuar Partida" : "Jugar";
+      if (descEl) descEl.textContent = completedCount > 0 ? `Retomar Nivel ${save.nivelActual || 1}` : "Comenzar el viaje de automatización";
+    }
+  }
+
   showToast(msg, duration = 2200) {
     const toast = document.getElementById('toast-msg');
+    if (!toast) return;
     toast.textContent = msg;
     toast.classList.add('show');
     clearTimeout(this.toastTimer);
@@ -2324,6 +2950,9 @@ export class BeltFlowGame {
     this.deliveredCount = 0;
     this.timeElapsed = 0;
 
+    // Estado de juego: 'menu' (Menú split-screen con screensaver) o 'playing'
+    this.state = 'menu';
+
     // Sistema de vidas, racha y estadísticas
     this.lives = 5;
     this.streak = 0;
@@ -2339,6 +2968,9 @@ export class BeltFlowGame {
     this.painterColor = PASTEL_COLORS.MINT;
     this.mode = 'edit'; // 'edit' (Edición) o 'view' (Vista)
 
+    // Circuito procedural relajante de fondo para el Menú
+    this.initDemoScene();
+
     const canvas = document.getElementById('game-canvas');
     this.sim = new Simulation(this.grid, (shape, deliveryPiece) => this.onShapeDelivered(shape, deliveryPiece));
     this.renderer = new Renderer(canvas, this.grid, this.sim);
@@ -2350,13 +2982,71 @@ export class BeltFlowGame {
     this.ui.updateModeUI(this.mode);
     this.updateCanvasCursor();
     this.loadLevel(this.saveData.nivelActual || 1);
+    this.ui.updateMenuStats();
 
-    // Auto-guardado cada 5 segundos según requerimiento
+    // Auto-guardado cada 5 segundos
     setInterval(() => this.autoSave(), 5000);
     window.addEventListener('beforeunload', () => this.autoSave());
 
     this.lastFrameTime = performance.now();
     requestAnimationFrame((t) => this.gameLoop(t));
+  }
+
+  initDemoScene() {
+    this.demoGrid = new Grid();
+    this.demoSim = new Simulation(this.demoGrid);
+
+    // Mini-fábrica relajante en bucle:
+    // Mina circular en (1, 2)
+    this.demoGrid.setMine(1, 2, { x: 1, y: 2, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) });
+    // Extractor sobre la mina
+    this.demoGrid.set(1, 2, {
+      x: 1, y: 2, type: 'extractor', dir: DIR.RIGHT,
+      shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true
+    });
+    // Cintas hacia la derecha
+    this.demoGrid.set(2, 2, { x: 2, y: 2, type: 'belt', dir: DIR.RIGHT, fixed: true });
+    // Pintor lavanda
+    this.demoGrid.set(3, 2, { x: 3, y: 2, type: 'painter', dir: DIR.RIGHT, color: PASTEL_COLORS.LAVENDER, fixed: true });
+    this.demoGrid.set(4, 2, { x: 4, y: 2, type: 'belt', dir: DIR.RIGHT, fixed: true });
+    // Cortadora
+    this.demoGrid.set(5, 2, { x: 5, y: 2, type: 'cutter', dir: DIR.RIGHT, fixed: true });
+    // Salida frontal hacia abajo
+    this.demoGrid.set(6, 2, { x: 6, y: 2, type: 'belt', dir: DIR.DOWN, fixed: true });
+    this.demoGrid.set(6, 3, { x: 6, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
+    // Salida derecha de la cortadora ya apunta a (5, 3)
+    this.demoGrid.set(5, 3, { x: 5, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
+    // Mezcladora
+    this.demoGrid.set(4, 3, { x: 4, y: 3, type: 'mixer', dir: DIR.LEFT, fixed: true });
+    this.demoGrid.set(3, 3, { x: 3, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
+    // Almacén receptor
+    this.demoGrid.set(2, 3, { x: 2, y: 3, type: 'delivery', dir: DIR.LEFT, fixed: true });
+  }
+
+  startGameFromMenu() {
+    const menuScreen = document.getElementById('main-menu-screen');
+    if (menuScreen) {
+      menuScreen.classList.add('closing');
+      setTimeout(() => {
+        menuScreen.style.display = 'none';
+        menuScreen.classList.remove('closing');
+        this.state = 'playing';
+        this.centerCameraOnLevel();
+      }, 460);
+    } else {
+      this.state = 'playing';
+      this.centerCameraOnLevel();
+    }
+  }
+
+  openMainMenu() {
+    this.state = 'menu';
+    const menuScreen = document.getElementById('main-menu-screen');
+    if (menuScreen) {
+      menuScreen.style.display = 'flex';
+      menuScreen.classList.remove('closing');
+      this.ui.updateMenuStats();
+    }
   }
 
   applyLoadedConfig() {
@@ -2366,10 +3056,41 @@ export class BeltFlowGame {
     this.audio.enabled = cfg.sonido !== false;
     this.ui.setSoundIcons(this.audio.enabled);
 
+    const vol = cfg.volumen !== undefined ? cfg.volumen : 0.8;
+    this.setVolume(vol);
+    const slider = document.getElementById('setting-volume-slider');
+    if (slider) slider.value = Math.round(vol * 100);
+    const sliderVal = document.getElementById('setting-volume-val');
+    if (sliderVal) sliderVal.textContent = `${Math.round(vol * 100)}%`;
+
+    this.setPalettePreset(cfg.palettePreset || 'suave');
+
     if (cfg.tipoDispositivo) {
-      document.getElementById('setting-controls-mode').value = cfg.tipoDispositivo;
+      const modeEl = document.getElementById('setting-controls-mode');
+      if (modeEl) modeEl.value = cfg.tipoDispositivo;
       this.detectAndApplyDeviceMode(cfg.tipoDispositivo);
     }
+  }
+
+  setVolume(vol) {
+    this.audio.setVolume(vol);
+    this.saveData.config.volumen = vol;
+  }
+
+  setPalettePreset(preset) {
+    const valid = ['suave', 'pastel-frio', 'pastel-calido', 'nordico', 'alto-contraste', 'sepia'];
+    const p = valid.includes(preset) ? preset : 'suave';
+    document.documentElement.setAttribute('data-palette', p);
+    this.saveData.config.palettePreset = p;
+
+    // Actualizar clase activa en las tarjetas de la interfaz
+    const cards = document.querySelectorAll('.palette-card[data-preset]');
+    cards.forEach(c => c.classList.toggle('active', c.dataset.preset === p));
+
+    if (this.currentLevel) {
+      this.ui.updateLevelInfo(this.currentLevel);
+    }
+    this.autoSave();
   }
 
   detectAndApplyDeviceMode(pref = 'auto') {
@@ -2400,8 +3121,9 @@ export class BeltFlowGame {
     this.isPaused = false;
     this.sim.reset();
     this.grid.cells.clear();
+    this.grid.mines.clear();
 
-    // Normalizar demandas del nivel (soporte de demandas múltiples y simples)
+    // Normalizar demandas del nivel
     if (lvl.demands && Array.isArray(lvl.demands)) {
       this.currentDemands = lvl.demands.map(d => ({
         ...d,
@@ -2419,20 +3141,34 @@ export class BeltFlowGame {
       this.totalQuota = lvl.quota;
     }
 
+    // Registrar piezas fijas y depósitos de minas
     if (lvl.fixedGrid) {
       for (const item of lvl.fixedGrid) {
-        this.grid.set(item.x, item.y, {
-          x: item.x,
-          y: item.y,
-          type: item.type,
-          dir: item.dir !== undefined ? item.dir : DIR.RIGHT,
-          shape: item.shape ? Shapes.clone(item.shape) : null,
-          color: item.color || null,
-          secondary: item.secondary || false,
-          deliveryIndex: item.deliveryIndex !== undefined ? item.deliveryIndex : (item.secondary ? 1 : 0),
-          fixed: true
-        });
+        if (item.type === 'mine') {
+          this.grid.setMine(item.x, item.y, {
+            x: item.x,
+            y: item.y,
+            shape: Shapes.clone(item.shape)
+          });
+        } else {
+          this.grid.set(item.x, item.y, {
+            x: item.x,
+            y: item.y,
+            type: item.type,
+            dir: item.dir !== undefined ? item.dir : DIR.RIGHT,
+            shape: item.shape ? Shapes.clone(item.shape) : null,
+            color: item.color || null,
+            secondary: item.secondary || false,
+            deliveryIndex: item.deliveryIndex !== undefined ? item.deliveryIndex : (item.secondary ? 1 : 0),
+            fixed: true
+          });
+        }
       }
+    }
+
+    // Asegurar que el extractor está disponible en los componentes
+    if (!lvl.availableTools.includes('extractor')) {
+      lvl.availableTools.push('extractor');
     }
 
     const savedBuildings = this.saveData.construcciones[lvl.id];
@@ -2444,7 +3180,6 @@ export class BeltFlowGame {
     this.ui.updateLevelInfo(lvl, this.currentDemands);
     this.ui.setLivesVisible(!!lvl.hasLives, this.lives);
 
-    // Ajustar herramienta inicial disponible
     if (!lvl.availableTools.includes(this.selectedTool) && this.selectedTool !== 'erase') {
       this.selectTool(lvl.availableTools[0] || 'belt');
     } else {
@@ -2507,7 +3242,6 @@ export class BeltFlowGame {
   }
 
   rotatePlacement() {
-    // Si el cursor está sobre una pieza existente modificable, rotar esa pieza directamente
     if (this.renderer.ghost) {
       const existing = this.grid.get(this.renderer.ghost.x, this.renderer.ghost.y);
       if (existing && !existing.fixed) {
@@ -2532,7 +3266,14 @@ export class BeltFlowGame {
     }
 
     const existing = this.grid.get(gridX, gridY);
-    const valid = !existing || !existing.fixed;
+    let valid = !existing || !existing.fixed;
+    let ghostShape = null;
+
+    if (this.selectedTool === 'extractor') {
+      const mine = this.grid.getMine(gridX, gridY);
+      valid = !!mine && (!existing || !existing.fixed);
+      ghostShape = mine ? Shapes.clone(mine.shape) : null;
+    }
 
     // Anticipar y alinear la dirección de la cinta automáticamente
     if (this.selectedTool === 'belt' && !existing && (!this.input || !this.input.isPointerDown)) {
@@ -2587,6 +3328,7 @@ export class BeltFlowGame {
       type: this.selectedTool,
       dir: this.placementDir,
       color: this.painterColor,
+      shape: ghostShape,
       valid: valid
     };
   }
@@ -2602,17 +3344,16 @@ export class BeltFlowGame {
       if (existing.dir !== this.placementDir) {
         existing.dir = this.placementDir;
       } else {
-        // Al hacer clic sobre una cinta que ya apunta en esta dirección, rota 90°
         existing.dir = (existing.dir + 1) % 4;
         this.placementDir = existing.dir;
       }
       this.renderer.addPlacementEffect(x, y, 'belt');
-      this.audio.playPlaf();
+      this.audio.playChainPlaf();
       this.updateGhost(x, y);
       return;
     }
 
-    // Si la celda está vacía, comprobar si hay una cinta vecina abierta que deba curvarse hacia aquí
+    // Comprobar si hay una cinta vecina abierta que deba curvarse hacia aquí
     for (let d = 0; d < 4; d++) {
       const neighborDelta = DIR_DELTA[OPPOSITE_DIR[d]];
       const nx = x + neighborDelta.x;
@@ -2622,7 +3363,6 @@ export class BeltFlowGame {
       if (neighbor && neighbor.type === 'belt' && !neighbor.fixed) {
         const frontDelta = DIR_DELTA[neighbor.dir];
         const frontPiece = this.grid.get(neighbor.x + frontDelta.x, neighbor.y + frontDelta.y);
-        // Si el frente del vecino está libre y d no es el sentido opuesto de 180°
         if (!frontPiece && d !== OPPOSITE_DIR[neighbor.dir]) {
           neighbor.dir = d;
           this.placementDir = d;
@@ -2631,7 +3371,6 @@ export class BeltFlowGame {
       }
     }
 
-    // Colocar la pieza en la celda
     this.placePieceAt(x, y);
   }
 
@@ -2642,7 +3381,6 @@ export class BeltFlowGame {
     const dy = toY - fromY;
     if (dx === 0 && dy === 0) return;
 
-    // Calcular la ruta ortogonal de casillas paso a paso
     const steps = [];
     let cx = fromX;
     let cy = fromY;
@@ -2675,13 +3413,11 @@ export class BeltFlowGame {
     let prevY = fromY;
 
     for (const step of steps) {
-      // 1. Girar la cinta previa hacia la nueva casilla para formar la curva automáticamente
       const prevPiece = this.grid.get(prevX, prevY);
       if (prevPiece && prevPiece.type === 'belt' && !prevPiece.fixed) {
         prevPiece.dir = step.dir;
       }
 
-      // 2. Colocar o reorientar la nueva cinta orientada en la dirección del trazo
       this.placementDir = step.dir;
       const targetPiece = this.grid.get(step.x, step.y);
       if (!targetPiece) {
@@ -2689,7 +3425,7 @@ export class BeltFlowGame {
       } else if (targetPiece.type === 'belt' && !targetPiece.fixed) {
         targetPiece.dir = step.dir;
         this.renderer.addPlacementEffect(step.x, step.y, 'belt');
-        this.audio.playPlaf();
+        this.audio.playChainPlaf();
       }
 
       prevX = step.x;
@@ -2718,7 +3454,7 @@ export class BeltFlowGame {
   }
 
   placePieceAt(x, y) {
-    if (this.mode === 'view') return; // En modo vista no se colocan piezas
+    if (this.mode === 'view') return;
 
     const existing = this.grid.get(x, y);
     if (existing && existing.fixed) {
@@ -2730,18 +3466,44 @@ export class BeltFlowGame {
       return;
     }
 
-    // Si ya existe una cinta y estamos colocando cinta con una nueva dirección
+    // Regla de Minas y Extractores: el extractor solo puede colocarse sobre una mina de recursos
+    if (this.selectedTool === 'extractor') {
+      if (!this.grid.hasMine(x, y)) {
+        this.audio.playError();
+        this.ui.showToast("⚠️ Los extractores deben colocarse sobre una mina de recursos", 2200);
+        return;
+      }
+
+      const mine = this.grid.getMine(x, y);
+      const newPiece = {
+        x: x,
+        y: y,
+        type: 'extractor',
+        dir: this.placementDir,
+        color: null,
+        shape: Shapes.clone(mine.shape),
+        fixed: false
+      };
+
+      this.grid.set(x, y, newPiece);
+      this.renderer.addPlacementEffect(x, y, 'extractor');
+      this.audio.playPlaf();
+      this.updateGhost(x, y);
+      return;
+    }
+
+    // Cinta sobre cinta
     if (existing && existing.type === 'belt' && this.selectedTool === 'belt') {
       if (existing.dir !== this.placementDir) {
         existing.dir = this.placementDir;
         this.renderer.addPlacementEffect(x, y, 'belt');
-        this.audio.playPlaf();
+        this.audio.playChainPlaf();
         this.updateGhost(x, y);
       }
       return;
     }
 
-    // Si ya existe la misma pieza con la misma dirección y color, no alterar
+    // Misma pieza sin cambios
     if (existing && existing.type === this.selectedTool && existing.dir === this.placementDir) {
       if (this.selectedTool !== 'painter' || existing.color === this.painterColor) {
         return;
@@ -2754,18 +3516,22 @@ export class BeltFlowGame {
       type: this.selectedTool,
       dir: this.placementDir,
       color: this.selectedTool === 'painter' ? this.painterColor : null,
-      shape: this.selectedTool === 'extractor' ? Shapes.clone(this.currentLevel.targetShape) : null,
+      shape: null,
       fixed: false
     };
 
     this.grid.set(x, y, newPiece);
     this.renderer.addPlacementEffect(x, y, this.selectedTool);
-    this.audio.playPlaf();
+    if (this.selectedTool === 'belt') {
+      this.audio.playChainPlaf();
+    } else {
+      this.audio.playPlaf();
+    }
     this.updateGhost(x, y);
   }
 
   removePieceAt(x, y) {
-    if (this.mode === 'view') return; // En modo vista no se borra
+    if (this.mode === 'view') return;
     const removed = this.grid.remove(x, y);
     if (removed) {
       this.audio.playDelete();
@@ -2860,7 +3626,6 @@ export class BeltFlowGame {
         this.completeLevel();
       }
     } else {
-      // Entrega errónea
       this.totalErrors++;
       this.streak = 0;
 
@@ -2905,7 +3670,25 @@ export class BeltFlowGame {
       this.saveData.mejoresTiempos[lvlId] = currentTime;
     }
 
+    // Cálculo de Estrellas (Oro, Plata, Bronce)
+    const starsConfig = this.currentLevel.stars || { gold: 30, silver: 60, bronze: 120 };
+    let starsEarned = 1;
+    if (currentTime <= starsConfig.gold) {
+      starsEarned = 3;
+    } else if (currentTime <= starsConfig.silver) {
+      starsEarned = 2;
+    } else {
+      starsEarned = 1;
+    }
+
+    if (!this.saveData.estrellas) this.saveData.estrellas = {};
+    const prevStars = this.saveData.estrellas[lvlId] || 0;
+    if (starsEarned > prevStars) {
+      this.saveData.estrellas[lvlId] = starsEarned;
+    }
+
     this.autoSave();
+    this.ui.updateMenuStats();
 
     const formatTime = (secs) => {
       const m = Math.floor(secs / 60);
@@ -2931,7 +3714,10 @@ export class BeltFlowGame {
       time: formatTime(currentTime),
       best: formatTime(this.saveData.mejoresTiempos[lvlId] || currentTime),
       precision: `${precisionPct}%`,
-      delivered: `${this.totalDelivered} / ${this.totalQuota}`
+      delivered: `${this.totalDelivered} / ${this.totalQuota}`,
+      starsEarned: starsEarned,
+      starsConfig: starsConfig,
+      timeElapsed: currentTime
     });
   }
 
@@ -2972,7 +3758,8 @@ export class BeltFlowGame {
   setReducedMotion(reduced) {
     this.renderer.reducedMotion = reduced;
     this.saveData.config.reducirMovimiento = reduced;
-    document.getElementById('setting-reduced-motion').checked = reduced;
+    const el = document.getElementById('setting-reduced-motion');
+    if (el) el.checked = reduced;
   }
 
   setControlsMode(mode) {
@@ -2991,6 +3778,7 @@ export class BeltFlowGame {
     this.saveData = SaveManager.reset();
     this.loadLevel(1);
     this.ui.toggleSettingsModal(false);
+    this.ui.updateMenuStats();
     this.ui.showToast("Progreso reiniciado correctamente", 2000);
   }
 
@@ -2998,7 +3786,7 @@ export class BeltFlowGame {
     const dt = Math.min(0.1, (currentTime - this.lastFrameTime) / 1000);
     this.lastFrameTime = currentTime;
 
-    if (!this.isPaused) {
+    if (this.state === 'playing' && !this.isPaused) {
       this.timeElapsed += dt * this.speedMult;
       this.sim.update(dt, this.speedMult);
 
@@ -3010,7 +3798,7 @@ export class BeltFlowGame {
       }
     }
 
-    this.renderer.render(dt, this.isPaused ? 0 : this.speedMult);
+    this.renderer.render(dt, (this.state === 'menu' || this.isPaused) ? 0 : this.speedMult);
 
     requestAnimationFrame((t) => this.gameLoop(t));
   }
