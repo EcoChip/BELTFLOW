@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BeltFlow - Puzle de Automatización y Cintas Transportadoras</title>
+  <meta name="description" content="BeltFlow: Un juego de automatización y puzles con cintas transportadoras, estética suave y relajante anti-fatiga, y 20 niveles progresivos.">
+  <meta name="theme-color" content="#F2F0EB">
+
+  <!-- Google Fonts: Inter, Nunito y JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <!-- Lienzo principal de renderizado 60 FPS -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Barra de información y controles superior (HUD) -->
+    <header class="top-hud">
+      <!-- Info de nivel -->
+      <div class="hud-panel">
+        <div class="level-info-box">
+          <span class="level-tag" id="level-tag">Nivel 1</span>
+          <span class="level-title heading" id="level-title">Primeros Pasos</span>
+        </div>
+      </div>
+
+      <!-- Objetivo de formas y cuota -->
+      <div class="hud-panel">
+        <div class="target-box">
+          <div class="target-shape-preview" title="Forma objetivo requerida">
+            <canvas id="target-preview-canvas" width="64" height="64"></canvas>
+          </div>
+          <div class="quota-status">
+            <span class="quota-label">Entregadas</span>
+            <span class="quota-numbers mono" id="quota-display">0 / 5</span>
+            <div class="quota-progress-track">
+              <div class="quota-progress-bar" id="quota-progress-bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tiempo transcurrido o restante -->
+      <div class="hud-panel">
+        <div class="timer-box">
+          <svg class="timer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="timer-value mono" id="timer-display">03:00</span>
+        </div>
+      </div>
+
+      <!-- Controles de simulación y menú -->
+      <div class="hud-panel top-controls">
+        <!-- Pausa / Reanudar -->
+        <button id="btn-pause" class="icon-btn" title="Pausar / Reanudar (Espacio)" aria-label="Pausa">
+          <svg id="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+            <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+          </svg>
+          <svg id="icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display: none;">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </button>
+
+        <!-- Velocidad (x1, x2, x4) -->
+        <button id="btn-speed" class="speed-btn mono" title="Velocidad del juego">1x</button>
+
+        <!-- Reiniciar nivel actual -->
+        <button id="btn-restart-level" class="icon-btn" title="Reiniciar nivel" aria-label="Reiniciar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+        </button>
+
+        <!-- Menú de niveles -->
+        <button id="btn-levels-modal" class="icon-btn" title="Seleccionar nivel (Esc)" aria-label="Niveles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+        </button>
+
+        <!-- Sonido -->
+        <button id="btn-sound-toggle" class="icon-btn" title="Activar/Silenciar sonido" aria-label="Sonido">
+          <svg id="icon-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg id="icon-sound-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display: none;">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+
+        <!-- Modo Oscuro / Claro -->
+        <button id="btn-theme-toggle" class="icon-btn" title="Alternar tema claro/oscuro" aria-label="Tema">
+          <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display: none;">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+
+        <!-- Ajustes -->
+        <button id="btn-settings" class="icon-btn" title="Configuración" aria-label="Ajustes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Consejo rápido / Pista -->
+    <div class="hint-banner" id="hint-banner">
+      <svg class="hint-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"></path>
+      </svg>
+      <span id="hint-text">Conecta el extractor con la salida usando una cinta recta.</span>
+    </div>
+
+    <!-- Botones flotantes (Táctil y acceso rápido) -->
+    <aside class="floating-actions" aria-label="Acciones rápidas">
+      <!-- Botón de Rotación -->
+      <button id="btn-fab-rotate" class="fab" title="Rotar pieza (R)" aria-label="Rotar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        <span class="fab-label">ROTAR</span>
+      </button>
+
+      <!-- Botón Modo Borrar -->
+      <button id="btn-fab-erase" class="fab" title="Alternar modo demolición (Clic derecho)" aria-label="Borrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        <span class="fab-label">BORRAR</span>
+      </button>
+
+      <!-- Centrar cámara -->
+      <button id="btn-fab-center" class="fab" title="Centrar cámara" aria-label="Centrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span class="fab-label">CENTRO</span>
+      </button>
+
+      <!-- Zoom In -->
+      <button id="btn-fab-zoomin" class="fab" title="Acercar (+)" aria-label="Acercar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <line x1="11" y1="8" x2="11" y2="14"></line>
+          <line x1="8" y1="11" x2="14" y2="11"></line>
+        </svg>
+      </button>
+
+      <!-- Zoom Out -->
+      <button id="btn-fab-zoomout" class="fab" title="Alejar (-)" aria-label="Alejar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <line x1="8" y1="11" x2="14" y2="11"></line>
+        </svg>
+      </button>
+    </aside>
+
+    <!-- Barra inferior con selector de componentes -->
+    <nav class="bottom-dock" aria-label="Barra de herramientas">
+      <!-- Selector de color para pintor -->
+      <div class="painter-color-bar" id="painter-color-bar">
+        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 4px;">Pintura:</span>
+        <button class="color-swatch active" data-color="mint" style="background-color: var(--pastel-mint);" title="Menta"></button>
+        <button class="color-swatch" data-color="sky" style="background-color: var(--pastel-sky);" title="Cielo"></button>
+        <button class="color-swatch" data-color="lavender" style="background-color: var(--pastel-lavender);" title="Lavanda"></button>
+        <button class="color-swatch" data-color="peach" style="background-color: var(--pastel-peach);" title="Durazno"></button>
+        <button class="color-swatch" data-color="coral" style="background-color: var(--pastel-coral);" title="Coral"></button>
+      </div>
+
+      <!-- Barra de herramientas con tarjetas -->
+      <div class="tools-bar" id="tools-bar">
+        <!-- 1: Cinta -->
+        <button class="tool-card active" data-tool="belt" title="Cinta transportadora (Tecla 1)">
+          <span class="tool-badge">1</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="2" y="6" width="20" height="12" rx="4"></rect>
+              <line x1="7" y1="6" x2="7" y2="18"></line>
+              <line x1="12" y1="6" x2="12" y2="18"></line>
+              <line x1="17" y1="6" x2="17" y2="18"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Cinta</span>
+        </button>
+
+        <!-- 2: Extractor -->
+        <button class="tool-card" data-tool="extractor" title="Extractor (Tecla 2)">
+          <span class="tool-badge">2</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 2v8"></path>
+              <path d="M5 10l7 7 7-7"></path>
+              <rect x="4" y="17" width="16" height="5" rx="1"></rect>
+            </svg>
+          </div>
+          <span class="tool-name">Extractor</span>
+        </button>
+
+        <!-- 3: Trituradora -->
+        <button class="tool-card" data-tool="trash" title="Trituradora / Basurero (Tecla 3)">
+          <span class="tool-badge">3</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Tritura</span>
+        </button>
+
+        <!-- 4: Cortadora -->
+        <button class="tool-card" data-tool="cutter" title="Cortadora (Tecla 4)">
+          <span class="tool-badge">4</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="6" cy="6" r="3"></circle>
+              <circle cx="6" cy="18" r="3"></circle>
+              <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+              <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+              <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Cortadora</span>
+        </button>
+
+        <!-- 5: Pintor -->
+        <button class="tool-card" data-tool="painter" title="Pintor (Tecla 5)">
+          <span class="tool-badge">5</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18.37 2.63L14 7l-1.5-1.5a1 1 0 0 0-1.41 0l-7.38 7.38a2 2 0 0 0 0 2.83l3.58 3.58a2 2 0 0 0 2.83 0l7.38-7.38a1 1 0 0 0 0-1.41L16 9l4.37-4.37a2.12 2.12 0 1 0-3-3z"></path>
+              <path d="M2 21h4"></path>
+            </svg>
+          </div>
+          <span class="tool-name">Pintor</span>
+        </button>
+
+        <!-- 6: Mezcladora -->
+        <button class="tool-card" data-tool="mixer" title="Mezcladora / Combinadora (Tecla 6)">
+          <span class="tool-badge">6</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="8" cy="12" r="5"></circle>
+              <circle cx="16" cy="12" r="5"></circle>
+            </svg>
+          </div>
+          <span class="tool-name">Mezcladora</span>
+        </button>
+
+        <!-- 7: Túnel -->
+        <button class="tool-card" data-tool="tunnel" title="Túnel Subterráneo (Tecla 7)">
+          <span class="tool-badge">7</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M4 19h16"></path>
+              <path d="M6 19v-6a6 6 0 0 1 12 0v6"></path>
+            </svg>
+          </div>
+          <span class="tool-name">Túnel</span>
+        </button>
+
+        <!-- 8: Borrador -->
+        <button class="tool-card" data-tool="erase" title="Modo demolición (Tecla 8)">
+          <span class="tool-badge">8</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Borrar</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Modal de Nivel Completado -->
+    <div class="modal-overlay" id="victory-modal">
+      <div class="modal-card victory-card">
+        <div class="victory-icon-circle">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M20 6L9 17l-5-5"></path>
+          </svg>
+        </div>
+        <h2 class="victory-title heading">¡Nivel Completado!</h2>
+        <p class="victory-subtitle" id="victory-message">Has optimizado la línea de producción a la perfección.</p>
+
+        <div class="victory-stats">
+          <div class="stat-box">
+            <div class="stat-label">Tiempo</div>
+            <div class="stat-value mono" id="victory-time">00:45.2</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Mejor Marca</div>
+            <div class="stat-value mono" id="victory-best">00:45.2</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; width: 100%;">
+          <button id="btn-replay-level" class="btn btn-secondary" style="flex: 1;">Reintentar</button>
+          <button id="btn-next-level" class="btn btn-primary" style="flex: 1.5;">Siguiente Nivel ➔</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Selección de Niveles -->
+    <div class="modal-overlay" id="levels-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title heading">Seleccionar Nivel</h2>
+          <button class="modal-close-btn" id="btn-close-levels" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="levels-grid" id="levels-grid-container">
+            <!-- Rellenado dinámicamente con los 20 niveles -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Configuración y Ayuda -->
+    <div class="modal-overlay" id="settings-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title heading">Ajustes & Controles</h2>
+          <button class="modal-close-btn" id="btn-close-settings" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-row">
+            <div class="setting-label-box">
+              <span class="setting-name">Modo Oscuro</span>
+              <span class="setting-desc">Alterna entre paleta clara suave y descansada nocturna</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-darkmode">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label-box">
+              <span class="setting-name">Modo de Interfaz</span>
+              <span class="setting-desc">Auto-detectar o forzar botones táctiles en pantalla</span>
+            </div>
+            <select id="setting-controls-mode" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 10px;">
+              <option value="auto">Automático</option>
+              <option value="touch">Táctil (Pantalla)</option>
+              <option value="mouse">Ratón / Teclado</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label-box">
+              <span class="setting-name">Reducir Animaciones</span>
+              <span class="setting-desc">Suprime efectos y partículas para mayor descanso visual</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-reduced-motion">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div style="margin-top: 10px; padding: 12px; background: var(--bg-color); border-radius: 10px; font-size: 13px; color: var(--text-muted);">
+            <strong style="color: var(--text-bright); display: block; margin-bottom: 6px;">Controles de PC:</strong>
+            • Clic izquierdo: Colocar pieza<br>
+            • Clic derecho: Eliminar pieza<br>
+            • Rueda o teclas 1-8: Seleccionar componente<br>
+            • Tecla R: Rotar pieza<br>
+            • Tecla Espacio: Pausar / Continuar<br>
+            • Teclas WASD / Flechas / Botón central: Mover mapa<br>
+            • Teclas + / - o rueda con Ctrl: Zoom
+          </div>
+
+          <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
+            <button id="btn-reset-save" class="btn btn-danger" style="font-size: 12px; padding: 6px 12px;">Reiniciar Todo el Progreso</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notificación Toast flotante -->
+    <div id="toast-msg" class="toast-msg">Mensaje informativo</div>
+  </div>
+
+  <!-- Lógica modular principal del juego -->
+  <script type="module" src="game.js"></script>
+</body>
+</html>
