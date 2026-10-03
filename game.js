@@ -908,7 +908,7 @@ export class Renderer {
 
     switch (piece.type) {
       case 'belt':
-        this.renderBeltTile(ctx, s);
+        this.renderBeltTile(ctx, piece, s);
         break;
       case 'spawner':
         this.renderSpawnerTile(ctx, piece, s);
@@ -939,7 +939,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  renderBeltTile(ctx, s) {
+  renderBeltTile(ctx, piece, s) {
     const bgColor = this.isDark ? '#252B33' : '#E6E1D8';
     const trackColor = this.isDark ? '#2E3540' : '#DED8CE';
     const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.18)';
@@ -952,23 +952,122 @@ export class Renderer {
     }
     ctx.fill();
 
-    ctx.fillStyle = trackColor;
-    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+    // Detectar si la cinta es una curva inspeccionando vecinos
+    let isLeftCurve = false;
+    let isRightCurve = false;
 
-    ctx.strokeStyle = arrowColor;
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    if (piece && piece.x !== undefined && piece.y !== undefined) {
+      const dir = piece.dir || 0;
+      const backDelta = DIR_DELTA[OPPOSITE_DIR[dir]];
+      const backPiece = this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y);
+      const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
 
-    const count = 3;
-    for (let i = 0; i < count; i++) {
-      const offset = ((i / count) + this.beltAnimOffset) % 1.0;
-      const x = -s / 2 + offset * s;
+      if (!hasBackInput) {
+        // Comprobar entrada por la izquierda relativa (dir + 3) % 4
+        const leftDelta = DIR_DELTA[(dir + 3) % 4];
+        const leftPiece = this.grid.get(piece.x + leftDelta.x, piece.y + leftDelta.y);
+        const hasLeftInput = leftPiece && leftPiece.type !== 'obstacle' && leftPiece.dir === (dir + 1) % 4;
+
+        // Comprobar entrada por la derecha relativa (dir + 1) % 4
+        const rightDelta = DIR_DELTA[(dir + 1) % 4];
+        const rightPiece = this.grid.get(piece.x + rightDelta.x, piece.y + rightDelta.y);
+        const hasRightInput = rightPiece && rightPiece.type !== 'obstacle' && rightPiece.dir === (dir + 3) % 4;
+
+        if (hasLeftInput && !hasRightInput) {
+          isLeftCurve = true;
+        } else if (hasRightInput && !hasLeftInput) {
+          isRightCurve = true;
+        }
+      }
+    }
+
+    if (isLeftCurve) {
+      // Curva desde la izquierda relativa (arriba en espacio local: -Y hacia +X)
+      ctx.strokeStyle = trackColor;
+      ctx.lineWidth = s * 0.56;
+      ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.moveTo(x - 5, -s * 0.18);
-      ctx.lineTo(x + 2, 0);
-      ctx.lineTo(x - 5, s * 0.18);
+      ctx.arc(s / 2, -s / 2, s / 2, Math.PI, Math.PI / 2, true);
       ctx.stroke();
+
+      // Flechas animadas a lo largo del arco
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const count = 3;
+      for (let i = 0; i < count; i++) {
+        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
+        const ang = Math.PI - offset * (Math.PI / 2);
+        const ax = s / 2 + Math.cos(ang) * (s / 2);
+        const ay = -s / 2 + Math.sin(ang) * (s / 2);
+        const tang = ang - Math.PI / 2;
+
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(tang);
+        ctx.beginPath();
+        ctx.moveTo(-5, -s * 0.18);
+        ctx.lineTo(2, 0);
+        ctx.lineTo(-5, s * 0.18);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (isRightCurve) {
+      // Curva desde la derecha relativa (abajo en espacio local: +Y hacia +X)
+      ctx.strokeStyle = trackColor;
+      ctx.lineWidth = s * 0.56;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.arc(s / 2, s / 2, s / 2, Math.PI, 3 * Math.PI / 2, false);
+      ctx.stroke();
+
+      // Flechas animadas a lo largo del arco
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const count = 3;
+      for (let i = 0; i < count; i++) {
+        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
+        const ang = Math.PI + offset * (Math.PI / 2);
+        const ax = s / 2 + Math.cos(ang) * (s / 2);
+        const ay = s / 2 + Math.sin(ang) * (s / 2);
+        const tang = ang + Math.PI / 2;
+
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(tang);
+        ctx.beginPath();
+        ctx.moveTo(-5, -s * 0.18);
+        ctx.lineTo(2, 0);
+        ctx.lineTo(-5, s * 0.18);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      // Cinta recta estándar
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const count = 3;
+      for (let i = 0; i < count; i++) {
+        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
+        const x = -s / 2 + offset * s;
+        ctx.beginPath();
+        ctx.moveTo(x - 5, -s * 0.18);
+        ctx.lineTo(x + 2, 0);
+        ctx.lineTo(-s * 0.18, 0);
+        ctx.moveTo(x - 5, -s * 0.18);
+        ctx.lineTo(x + 2, 0);
+        ctx.lineTo(x - 5, s * 0.18);
+        ctx.stroke();
+      }
     }
   }
 
@@ -1350,13 +1449,24 @@ export class InputManager {
           const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
           this.game.removePieceAt(pos.gridX, pos.gridY);
         }, 380);
+
+        const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
+        if (this.game.selectedTool === 'belt') {
+          this.game.handleBeltPlacement(pos.gridX, pos.gridY);
+          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+        }
       } else {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         if (e.button === 2 || this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else if (e.button === 0) {
-          this.game.placePieceAt(pos.gridX, pos.gridY);
-          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+          if (this.game.selectedTool === 'belt') {
+            this.game.handleBeltPlacement(pos.gridX, pos.gridY);
+            this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+          } else {
+            this.game.placePieceAt(pos.gridX, pos.gridY);
+            this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+          }
         }
       }
     } else if (this.activePointers.size === 2) {
@@ -1427,19 +1537,41 @@ export class InputManager {
 
     // MODO EDICIÓN
     if (e.pointerType === 'touch') {
-      // En táctil, arrastrar con 1 dedo desplaza la cámara si se mueve más de 10px
-      if (totalDist > 10) {
-        this.isDraggingMap = true;
-        this.game.renderer.camX += dx;
-        this.game.renderer.camY += dy;
+      if (this.game.selectedTool === 'belt') {
+        // En táctil con herramienta de cinta: trazo continuo con curvas automáticas
+        if (!this.lastPlacedCell) {
+          this.game.handleBeltPlacement(pos.gridX, pos.gridY);
+          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+        } else if (this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
+          this.game.dragDrawBelt(this.lastPlacedCell.x, this.lastPlacedCell.y, pos.gridX, pos.gridY);
+          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+        }
+      } else if (this.game.selectedTool === 'erase') {
+        this.game.removePieceAt(pos.gridX, pos.gridY);
+      } else {
+        // En táctil con otras herramientas, arrastrar con 1 dedo desplaza la cámara si se mueve más de 10px
+        if (totalDist > 10) {
+          this.isDraggingMap = true;
+          this.game.renderer.camX += dx;
+          this.game.renderer.camY += dy;
+        }
       }
     } else {
       // En PC con ratón
       if (e.buttons === 1 && !this.longPressTriggered) {
         if (this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
+        } else if (this.game.selectedTool === 'belt') {
+          // Trazar cintas continuas con curvado automático de esquinas
+          if (!this.lastPlacedCell) {
+            this.game.handleBeltPlacement(pos.gridX, pos.gridY);
+            this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+          } else if (this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
+            this.game.dragDrawBelt(this.lastPlacedCell.x, this.lastPlacedCell.y, pos.gridX, pos.gridY);
+            this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
+          }
         } else {
-          // Colocar al arrastrar respetando SIEMPRE la rotación actual de la preview
+          // Otras herramientas: colocar celda a celda
           if (!this.lastPlacedCell || this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
             this.game.placePieceAt(pos.gridX, pos.gridY);
             this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
@@ -1473,6 +1605,10 @@ export class InputManager {
         if (e.pointerType === 'touch') {
           if (this.game.selectedTool === 'erase') {
             this.game.removePieceAt(pos.gridX, pos.gridY);
+          } else if (this.game.selectedTool === 'belt') {
+            if (!this.lastPlacedCell) {
+              this.game.handleBeltPlacement(pos.gridX, pos.gridY);
+            }
           } else {
             this.game.placePieceAt(pos.gridX, pos.gridY);
           }
@@ -2005,6 +2141,18 @@ export class BeltFlowGame {
   }
 
   rotatePlacement() {
+    // Si el cursor está sobre una pieza existente modificable, rotar esa pieza directamente
+    if (this.renderer.ghost) {
+      const existing = this.grid.get(this.renderer.ghost.x, this.renderer.ghost.y);
+      if (existing && !existing.fixed) {
+        existing.dir = (existing.dir + 1) % 4;
+        this.placementDir = existing.dir;
+        this.audio.playRotate();
+        this.updateGhost();
+        return;
+      }
+    }
+
     this.placementDir = (this.placementDir + 1) % 4;
     this.audio.playRotate();
     this.updateGhost();
@@ -2020,6 +2168,53 @@ export class BeltFlowGame {
     const existing = this.grid.get(gridX, gridY);
     const valid = !existing || !existing.fixed;
 
+    // Anticipar y alinear la dirección de la cinta automáticamente
+    if (this.selectedTool === 'belt' && !existing && (!this.input || !this.input.isPointerDown)) {
+      let detectedDir = null;
+
+      // 1. Prioridad: un vecino que ya apunte directamente hacia esta casilla
+      for (let d = 0; d < 4; d++) {
+        const backDelta = DIR_DELTA[OPPOSITE_DIR[d]];
+        const neighbor = this.grid.get(gridX + backDelta.x, gridY + backDelta.y);
+        if (neighbor && neighbor.type !== 'obstacle' && neighbor.dir === d) {
+          detectedDir = d;
+          break;
+        }
+      }
+
+      // 2. Si no, comprobar si hay una cinta vecina abierta que pueda curvarse hacia aquí
+      if (detectedDir === null) {
+        for (let d = 0; d < 4; d++) {
+          const neighborDelta = DIR_DELTA[OPPOSITE_DIR[d]];
+          const neighbor = this.grid.get(gridX + neighborDelta.x, gridY + neighborDelta.y);
+          if (neighbor && neighbor.type === 'belt' && !neighbor.fixed) {
+            const frontDelta = DIR_DELTA[neighbor.dir];
+            const frontPiece = this.grid.get(neighbor.x + frontDelta.x, neighbor.y + frontDelta.y);
+            if (!frontPiece && d !== OPPOSITE_DIR[neighbor.dir]) {
+              detectedDir = d;
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Si no, comprobar si esta casilla apunta a una salida (delivery) o trituradora cercana
+      if (detectedDir === null) {
+        for (let d = 0; d < 4; d++) {
+          const forwardDelta = DIR_DELTA[d];
+          const neighbor = this.grid.get(gridX + forwardDelta.x, gridY + forwardDelta.y);
+          if (neighbor && (neighbor.type === 'delivery' || neighbor.type === 'trash')) {
+            detectedDir = d;
+            break;
+          }
+        }
+      }
+
+      if (detectedDir !== null) {
+        this.placementDir = detectedDir;
+      }
+    }
+
     this.renderer.ghost = {
       x: gridX,
       y: gridY,
@@ -2028,6 +2223,112 @@ export class BeltFlowGame {
       color: this.painterColor,
       valid: valid
     };
+  }
+
+  handleBeltPlacement(x, y) {
+    if (this.mode === 'view') return;
+
+    const existing = this.grid.get(x, y);
+    if (existing && existing.fixed) return;
+
+    // Si ya existe una cinta en esta celda
+    if (existing && existing.type === 'belt') {
+      if (existing.dir !== this.placementDir) {
+        existing.dir = this.placementDir;
+      } else {
+        // Al hacer clic sobre una cinta que ya apunta en esta dirección, rota 90°
+        existing.dir = (existing.dir + 1) % 4;
+        this.placementDir = existing.dir;
+      }
+      this.audio.playPlace();
+      this.updateGhost(x, y);
+      return;
+    }
+
+    // Si la celda está vacía, comprobar si hay una cinta vecina abierta que deba curvarse hacia aquí
+    for (let d = 0; d < 4; d++) {
+      const neighborDelta = DIR_DELTA[OPPOSITE_DIR[d]];
+      const nx = x + neighborDelta.x;
+      const ny = y + neighborDelta.y;
+      const neighbor = this.grid.get(nx, ny);
+
+      if (neighbor && neighbor.type === 'belt' && !neighbor.fixed) {
+        const frontDelta = DIR_DELTA[neighbor.dir];
+        const frontPiece = this.grid.get(neighbor.x + frontDelta.x, neighbor.y + frontDelta.y);
+        // Si el frente del vecino está libre y d no es el sentido opuesto de 180°
+        if (!frontPiece && d !== OPPOSITE_DIR[neighbor.dir]) {
+          neighbor.dir = d;
+          this.placementDir = d;
+          break;
+        }
+      }
+    }
+
+    // Colocar la pieza en la celda
+    this.placePieceAt(x, y);
+  }
+
+  dragDrawBelt(fromX, fromY, toX, toY) {
+    if (this.mode !== 'edit' || this.selectedTool !== 'belt') return;
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    if (dx === 0 && dy === 0) return;
+
+    // Calcular la ruta ortogonal de casillas paso a paso
+    const steps = [];
+    let cx = fromX;
+    let cy = fromY;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const stepX = Math.sign(dx);
+      while (cx !== toX) {
+        cx += stepX;
+        steps.push({ x: cx, y: cy, dir: stepX > 0 ? DIR.RIGHT : DIR.LEFT });
+      }
+      const stepY = Math.sign(dy);
+      while (cy !== toY) {
+        cy += stepY;
+        steps.push({ x: cx, y: cy, dir: stepY > 0 ? DIR.DOWN : DIR.UP });
+      }
+    } else {
+      const stepY = Math.sign(dy);
+      while (cy !== toY) {
+        cy += stepY;
+        steps.push({ x: cx, y: cy, dir: stepY > 0 ? DIR.DOWN : DIR.UP });
+      }
+      const stepX = Math.sign(dx);
+      while (cx !== toX) {
+        cx += stepX;
+        steps.push({ x: cx, y: cy, dir: stepX > 0 ? DIR.RIGHT : DIR.LEFT });
+      }
+    }
+
+    let prevX = fromX;
+    let prevY = fromY;
+
+    for (const step of steps) {
+      // 1. Girar la cinta previa hacia la nueva casilla para formar la curva automáticamente
+      const prevPiece = this.grid.get(prevX, prevY);
+      if (prevPiece && prevPiece.type === 'belt' && !prevPiece.fixed) {
+        prevPiece.dir = step.dir;
+      }
+
+      // 2. Colocar o reorientar la nueva cinta orientada en la dirección del trazo
+      this.placementDir = step.dir;
+      const targetPiece = this.grid.get(step.x, step.y);
+      if (!targetPiece) {
+        this.placePieceAt(step.x, step.y);
+      } else if (targetPiece.type === 'belt' && !targetPiece.fixed) {
+        targetPiece.dir = step.dir;
+        this.audio.playPlace();
+      }
+
+      prevX = step.x;
+      prevY = step.y;
+    }
+
+    this.updateGhost(toX, toY);
   }
 
   toggleMode() {
@@ -2061,6 +2362,16 @@ export class BeltFlowGame {
       return;
     }
 
+    // Si ya existe una cinta y estamos colocando cinta con una nueva dirección
+    if (existing && existing.type === 'belt' && this.selectedTool === 'belt') {
+      if (existing.dir !== this.placementDir) {
+        existing.dir = this.placementDir;
+        this.audio.playPlace();
+        this.updateGhost(x, y);
+      }
+      return;
+    }
+
     // Si ya existe la misma pieza con la misma dirección y color, no alterar
     if (existing && existing.type === this.selectedTool && existing.dir === this.placementDir) {
       if (this.selectedTool !== 'painter' || existing.color === this.painterColor) {
@@ -2072,7 +2383,7 @@ export class BeltFlowGame {
       x: x,
       y: y,
       type: this.selectedTool,
-      dir: this.placementDir, // Respetar SIEMPRE y fielmente la orientación de la preview
+      dir: this.placementDir,
       color: this.selectedTool === 'painter' ? this.painterColor : null,
       shape: this.selectedTool === 'extractor' ? Shapes.clone(this.currentLevel.targetShape) : null,
       fixed: false
