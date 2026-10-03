@@ -339,6 +339,109 @@ button:focus-visible {
   background: var(--surface-hover);
 }
 
+/* Botón de alternancia Modo Vista / Edición */
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+  color: var(--text-main);
+  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+
+.mode-toggle-btn:hover {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.mode-toggle-btn.edit {
+  border-color: var(--pastel-mint);
+  background: rgba(168, 213, 186, 0.15);
+}
+
+.mode-toggle-btn.view {
+  border-color: var(--pastel-sky);
+  background: rgba(169, 204, 227, 0.22);
+}
+
+.mode-toggle-key {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-active);
+  color: var(--text-muted);
+}
+
+/* Indicador flotante de modo en esquina inferior izquierda */
+.mode-indicator-pill {
+  position: absolute;
+  bottom: 84px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  z-index: 19;
+  pointer-events: none;
+  transition: var(--transition-smooth);
+}
+
+.mode-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--pastel-mint);
+  transition: background-color 0.25s ease;
+}
+
+.mode-indicator-pill.view .mode-pill-dot {
+  background: var(--pastel-sky);
+}
+
+.mode-indicator-pill.view {
+  border-color: var(--pastel-sky);
+}
+
+.mode-pill-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Cursores para canvas */
+#game-canvas.view-mode {
+  cursor: grab;
+}
+
+#game-canvas.view-mode:active,
+#game-canvas.grabbing {
+  cursor: grabbing !important;
+}
+
+#game-canvas.space-grab {
+  cursor: grab !important;
+}
+
+#game-canvas.space-grab:active {
+  cursor: grabbing !important;
+}
+
 /* ==========================================================================
    Barra Inferior de Componentes (Tool Dock)
    ========================================================================== */

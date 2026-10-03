@@ -33,23 +33,29 @@ El objetivo en cada nivel es suministrar a la salida la cuota solicitada de form
 
 ## 🕹️ Controles
 
+### Modos de Interacción (Tecla Q)
+- **Modo Edición (✏️)** *(por defecto)*: Diseña y automatiza. Clic izquierdo coloca piezas con la rotación exacta previsualizada, clic derecho elimina piezas.
+- **Modo Vista (👁️)**: Inspecciona fábricas complejas sin riesgo de alterar nada. Clic izquierdo y arrastrar desplaza la cámara libremente, rueda o pinza hace zoom.
+
 ### En PC (Ratón y Teclado)
-- **Clic Izquierdo**: Colocar componente seleccionado (arrastra para crear cintas continuas orientadas automáticamente).
-- **Clic Derecho**: Eliminar componente.
+- **Tecla Q**: Alternar entre Modo Edición y Modo Vista.
+- **Clic Izquierdo**: Colocar componente seleccionado (en Modo Edición).
+- **Clic Derecho**: Eliminar componente (en Modo Edición).
+- **Botón Central del Ratón**: Desplazar la cámara (*pan*) en cualquier modo (incluso colocando piezas).
+- **Espacio + Arrastrar**: Desplazar la cámara (*pan* estilo Figma/Tiled). Pulsación corta de **Espacio** sin arrastrar pausa/reanuda la simulación.
 - **Rueda del ratón o teclas 1 al 8**: Seleccionar herramienta.
 - **Tecla R**: Rotar orientación (90° en sentido horario).
-- **Espacio**: Pausar / Reanudar la simulación.
 - **Esc**: Abrir / Cerrar el menú de selección de niveles.
 - **Teclas + / -**: Acercar o alejar el zoom de la cámara.
-- **Arrastrar con Botón Central o teclas W / A / S / D**: Desplazar el mapa.
+- **Teclas W / A / S / D o Flechas**: Desplazar el mapa.
 
 ### En Pantallas Táctiles (Móviles y Tablets)
-- **Toque rápido (Tap)**: Colocar pieza.
-- **Mantener pulsado (Long Press 380ms)**: Eliminar pieza.
-- **Arrastrar sobre el mapa con un dedo**: Desplazar la cámara.
+- **Botón 👁️ / ✏️**: Alternar entre Modo Vista y Modo Edición con un toque en la barra o botón flotante.
+- **En Modo Edición**: Toque rápido (*tap*) para colocar pieza, mantener pulsado (380ms) para eliminar pieza.
+- **En Modo Vista**: Arrastrar con un dedo desplaza el mapa con seguridad absoluta sin colocar piezas accidentales.
 - **Pellizcar con dos dedos (Pinch-to-zoom)**: Control de zoom fluido.
-- **Botones Flotantes en pantalla**: Botón grande de rotación rápida, alternador de modo borrado, centrar cámara y controles de zoom.
-- **Barra de herramientas táctil**: Áreas de toque superiores a 48px según directrices de accesibilidad.
+- **Botones Flotantes en pantalla**: Botón de modo, rotación rápida, alternador de demolición, centrar cámara y controles de zoom.
+- **Barra de herramientas táctil**: Áreas de toque de ≥ 48px según directrices de accesibilidad.
 
 ---
 

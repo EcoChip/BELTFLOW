@@ -58,6 +58,13 @@
 
       <!-- Controles de simulación y menú -->
       <div class="hud-panel top-controls">
+        <!-- Alternador Modo Vista / Edición (Tecla Q) -->
+        <button id="btn-mode-toggle" class="mode-toggle-btn edit" title="Alternar Modo Vista / Edición (Tecla Q)" aria-label="Modo Vista / Edición">
+          <span class="mode-toggle-icon" id="mode-toggle-icon">✏️</span>
+          <span class="mode-toggle-label" id="mode-toggle-label">Edición</span>
+          <span class="mode-toggle-key mono">Q</span>
+        </button>
+
         <!-- Pausa / Reanudar -->
         <button id="btn-pause" class="icon-btn" title="Pausar / Reanudar (Espacio)" aria-label="Pausa">
           <svg id="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -139,8 +146,21 @@
       <span id="hint-text">Conecta el extractor con la salida usando una cinta recta.</span>
     </div>
 
+    <!-- Indicador visual flotante de modo -->
+    <div id="mode-indicator-pill" class="mode-indicator-pill edit">
+      <span class="mode-pill-dot" id="mode-pill-dot"></span>
+      <span id="mode-pill-text">Modo Edición</span>
+      <span class="mode-pill-hint mono">[Q]</span>
+    </div>
+
     <!-- Botones flotantes (Táctil y acceso rápido) -->
     <aside class="floating-actions" aria-label="Acciones rápidas">
+      <!-- Botón Modo Vista / Edición (Táctil y rápido) -->
+      <button id="btn-fab-mode" class="fab mode-fab" title="Alternar modo Vista / Edición (Q)" aria-label="Modo">
+        <span id="fab-mode-icon" style="font-size: 18px; line-height: 1;">✏️</span>
+        <span class="fab-label" id="fab-mode-label">EDICIÓN</span>
+      </button>
+
       <!-- Botón de Rotación -->
       <button id="btn-fab-rotate" class="fab" title="Rotar pieza (R)" aria-label="Rotar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">

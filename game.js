@@ -786,14 +786,21 @@ export class Renderer {
     this.camY = this.height / 2 - gridY * this.tileSize * this.zoom;
   }
 
-  screenToWorld(screenX, screenY) {
-    const worldX = (screenX - this.camX) / (this.tileSize * this.zoom);
-    const worldY = (screenY - this.camY) / (this.tileSize * this.zoom);
+  screenToWorld(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const worldX = (mouseX - this.camX) / this.zoom;
+    const worldY = (mouseY - this.camY) / this.zoom;
+    const gridX = Math.floor(worldX / this.tileSize);
+    const gridY = Math.floor(worldY / this.tileSize);
     return {
-      gridX: Math.floor(worldX),
-      gridY: Math.floor(worldY),
-      rawX: worldX,
-      rawY: worldY
+      gridX,
+      gridY,
+      worldX,
+      worldY,
+      rawX: worldX / this.tileSize,
+      rawY: worldY / this.tileSize
     };
   }
 
@@ -1141,25 +1148,25 @@ export class Renderer {
   }
 
   drawGhost(ctx, ghost) {
-    const s = this.tileSize;
-    const cx = (ghost.x + 0.5) * s;
-    const cy = (ghost.y + 0.5) * s;
+    // En modo Vista no se muestra la previsualización de colocación
+    if (this.game && this.game.mode === 'view') return;
 
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate((ghost.dir || 0) * (Math.PI / 2));
-    ctx.globalAlpha = 0.52;
+    ctx.globalAlpha = 0.55;
 
     if (ghost.type === 'erase') {
+      const s = this.tileSize;
+      const px = ghost.x * s;
+      const py = ghost.y * s;
       ctx.fillStyle = '#E8A0A0';
       if (ctx.roundRect) {
-        ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 6);
+        ctx.roundRect(px + 2, py + 2, s - 4, s - 4, 6);
       } else {
-        ctx.rect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
+        ctx.fillRect(px + 2, py + 2, s - 4, s - 4);
       }
-      ctx.fill();
     } else {
-      this.drawPiece(ctx, { ...ghost, x: 0, y: 0, dir: 0 });
+      // drawPiece ya calcula la posición de mundo (piece.x + 0.5) * s y rota piece.dir
+      this.drawPiece(ctx, ghost);
     }
 
     ctx.restore();
@@ -1265,6 +1272,11 @@ export class InputManager {
     this.isDraggingMap = false;
     this.lastPlacedCell = null;
 
+    // Estado especial para desplazamiento con botón central y Espacio
+    this.isMiddleDragging = false;
+    this.isSpaceDown = false;
+    this.spaceDragged = false;
+
     this.activePointers = new Map();
     this.initialPinchDistance = 0;
     this.initialPinchZoom = 1.0;
@@ -1286,11 +1298,31 @@ export class InputManager {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
 
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
+    window.addEventListener('keyup', (e) => this.onKeyUp(e));
   }
 
   onPointerDown(e) {
     this.canvas.setPointerCapture(e.pointerId);
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // 1. Desplazamiento con botón central del ratón (disponible en ambos modos)
+    if (e.button === 1) {
+      this.isMiddleDragging = true;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      this.canvas.classList.add('grabbing');
+      return;
+    }
+
+    // 2. Desplazamiento manteniendo pulsada la tecla Espacio (estándar Figma/Tiled)
+    if (this.isSpaceDown) {
+      this.isDraggingMap = true;
+      this.isPointerDown = true;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      this.canvas.classList.add('grabbing');
+      return;
+    }
 
     if (this.activePointers.size === 1) {
       this.isPointerDown = true;
@@ -1303,6 +1335,14 @@ export class InputManager {
       this.longPressTriggered = false;
       this.lastPlacedCell = null;
 
+      // 3. MODO VISTA: clic izquierdo no coloca, desplaza la cámara libremente
+      if (this.game.mode === 'view') {
+        this.isDraggingMap = true;
+        this.canvas.classList.add('grabbing');
+        return;
+      }
+
+      // 4. MODO EDICIÓN: colocar o borrar piezas
       if (e.pointerType === 'touch') {
         clearTimeout(this.longPressTimer);
         this.longPressTimer = setTimeout(() => {
@@ -1311,16 +1351,16 @@ export class InputManager {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         }, 380);
       } else {
+        const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         if (e.button === 2 || this.game.selectedTool === 'erase') {
-          const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else if (e.button === 0) {
-          const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
           this.game.placePieceAt(pos.gridX, pos.gridY);
           this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
         }
       }
     } else if (this.activePointers.size === 2) {
+      // Gesto de pinza táctil para zoom
       clearTimeout(this.longPressTimer);
       const points = Array.from(this.activePointers.values());
       this.initialPinchDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
@@ -1336,6 +1376,7 @@ export class InputManager {
     const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
     this.game.updateGhost(pos.gridX, pos.gridY);
 
+    // Zoom por pinza táctil (2 dedos)
     if (this.activePointers.size === 2) {
       const points = Array.from(this.activePointers.values());
       const currentDist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
@@ -1346,46 +1387,63 @@ export class InputManager {
       return;
     }
 
-    if (!this.isPointerDown) return;
-
     const dx = e.clientX - this.lastPointerX;
     const dy = e.clientY - this.lastPointerY;
-    const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
 
+    // Pan con botón central
+    if (this.isMiddleDragging || e.buttons === 4) {
+      this.game.renderer.camX += dx;
+      this.game.renderer.camY += dy;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      return;
+    }
+
+    // Pan con Espacio + arrastrar
+    if (this.isSpaceDown && this.isPointerDown) {
+      this.spaceDragged = true;
+      this.game.renderer.camX += dx;
+      this.game.renderer.camY += dy;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      return;
+    }
+
+    if (!this.isPointerDown) return;
+
+    const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
     if (totalDist > 8) {
       clearTimeout(this.longPressTimer);
     }
 
+    // Pan en MODO VISTA
+    if (this.game.mode === 'view') {
+      this.game.renderer.camX += dx;
+      this.game.renderer.camY += dy;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      return;
+    }
+
+    // MODO EDICIÓN
     if (e.pointerType === 'touch') {
-      // En táctil, si arrastra > 10px, desplaza el mapa suavemente
+      // En táctil, arrastrar con 1 dedo desplaza la cámara si se mueve más de 10px
       if (totalDist > 10) {
         this.isDraggingMap = true;
         this.game.renderer.camX += dx;
         this.game.renderer.camY += dy;
       }
     } else {
-      // En PC
-      if (e.buttons === 4 || (e.buttons === 1 && e.shiftKey)) {
-        this.isDraggingMap = true;
-        this.game.renderer.camX += dx;
-        this.game.renderer.camY += dy;
-      } else if (e.buttons === 1 && !this.longPressTriggered) {
+      // En PC con ratón
+      if (e.buttons === 1 && !this.longPressTriggered) {
         if (this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else {
-          // Auto-orientar cintas al arrastrar
-          if (this.lastPlacedCell && (this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY)) {
-            const deltaX = pos.gridX - this.lastPlacedCell.x;
-            const deltaY = pos.gridY - this.lastPlacedCell.y;
-            if (Math.abs(deltaX) + Math.abs(deltaY) === 1 && this.game.selectedTool === 'belt') {
-              if (deltaX === 1) this.game.placementDir = DIR.RIGHT;
-              else if (deltaX === -1) this.game.placementDir = DIR.LEFT;
-              else if (deltaY === 1) this.game.placementDir = DIR.DOWN;
-              else if (deltaY === -1) this.game.placementDir = DIR.UP;
-            }
+          // Colocar al arrastrar respetando SIEMPRE la rotación actual de la preview
+          if (!this.lastPlacedCell || this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
+            this.game.placePieceAt(pos.gridX, pos.gridY);
+            this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
           }
-          this.game.placePieceAt(pos.gridX, pos.gridY);
-          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
         }
       } else if (e.buttons === 2) {
         this.game.removePieceAt(pos.gridX, pos.gridY);
@@ -1400,10 +1458,17 @@ export class InputManager {
     clearTimeout(this.longPressTimer);
     this.activePointers.delete(e.pointerId);
 
+    if (e.button === 1) {
+      this.isMiddleDragging = false;
+    }
+
+    this.canvas.classList.remove('grabbing');
+
     if (this.activePointers.size === 0) {
       const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
 
-      if (!this.isDraggingMap && !this.longPressTriggered && totalDist < 12) {
+      // Si es un tap limpio en pantalla táctil y en MODO EDICIÓN
+      if (this.game.mode === 'edit' && !this.isDraggingMap && !this.longPressTriggered && totalDist < 12) {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         if (e.pointerType === 'touch') {
           if (this.game.selectedTool === 'erase') {
@@ -1433,10 +1498,31 @@ export class InputManager {
   }
 
   onKeyDown(e) {
+    // Tecla Q para alternar entre Modo Vista y Modo Edición
+    if (e.key === 'q' || e.key === 'Q') {
+      this.game.toggleMode();
+      return;
+    }
+
+    // Tecla Espacio: prepararse para pan si se arrastra, o pausar al soltar
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (!this.isSpaceDown) {
+        this.isSpaceDown = true;
+        this.spaceDragged = false;
+        this.canvas.classList.add('space-grab');
+      }
+      return;
+    }
+
+    // Teclas 1 a 8 para herramientas (solo en modo edición o cambia herramienta y pasa a edición)
     const tools = ['belt', 'extractor', 'trash', 'cutter', 'painter', 'mixer', 'tunnel', 'erase'];
     if (e.key >= '1' && e.key <= '8') {
       const idx = parseInt(e.key, 10) - 1;
       if (tools[idx]) {
+        if (this.game.mode === 'view') {
+          this.game.toggleMode(); // Pasar a modo edición al seleccionar herramienta
+        }
         this.game.selectTool(tools[idx]);
       }
       return;
@@ -1445,10 +1531,6 @@ export class InputManager {
     switch (e.key.toLowerCase()) {
       case 'r':
         this.game.rotatePlacement();
-        break;
-      case ' ':
-        e.preventDefault();
-        this.game.togglePause();
         break;
       case 'escape':
         this.game.ui.toggleLevelsModal();
@@ -1479,6 +1561,19 @@ export class InputManager {
         break;
     }
   }
+
+  onKeyUp(e) {
+    if (e.key === ' ') {
+      this.isSpaceDown = false;
+      this.canvas.classList.remove('space-grab');
+      this.canvas.classList.remove('grabbing');
+      // Si fue solo una pulsación corta sin arrastre, alterna pausa/play
+      if (!this.spaceDragged) {
+        this.game.togglePause();
+      }
+      this.spaceDragged = false;
+    }
+  }
 }
 
 /* ==========================================================================
@@ -1491,6 +1586,13 @@ export class UIManager {
   }
 
   bindDOM() {
+    // Alternar Modo Vista / Edición
+    const btnMode = document.getElementById('btn-mode-toggle');
+    if (btnMode) btnMode.addEventListener('click', () => this.game.toggleMode());
+
+    const btnFabMode = document.getElementById('btn-fab-mode');
+    if (btnFabMode) btnFabMode.addEventListener('click', () => this.game.toggleMode());
+
     document.getElementById('btn-pause').addEventListener('click', () => this.game.togglePause());
     document.getElementById('btn-speed').addEventListener('click', () => this.game.cycleSpeed());
     document.getElementById('btn-restart-level').addEventListener('click', () => this.game.restartCurrentLevel());
@@ -1736,6 +1838,35 @@ export class UIManager {
       toast.classList.remove('show');
     }, duration);
   }
+
+  updateModeUI(mode) {
+    const isEdit = mode === 'edit';
+
+    const btn = document.getElementById('btn-mode-toggle');
+    if (btn) {
+      btn.className = `mode-toggle-btn ${isEdit ? 'edit' : 'view'}`;
+      const icon = document.getElementById('mode-toggle-icon');
+      if (icon) icon.textContent = isEdit ? '✏️' : '👁️';
+      const label = document.getElementById('mode-toggle-label');
+      if (label) label.textContent = isEdit ? 'Edición' : 'Vista';
+    }
+
+    const fab = document.getElementById('btn-fab-mode');
+    if (fab) {
+      fab.className = `fab mode-fab ${isEdit ? '' : 'active'}`;
+      const fabIcon = document.getElementById('fab-mode-icon');
+      if (fabIcon) fabIcon.textContent = isEdit ? '✏️' : '👁️';
+      const fabLabel = document.getElementById('fab-mode-label');
+      if (fabLabel) fabLabel.textContent = isEdit ? 'EDICIÓN' : 'VISTA';
+    }
+
+    const pill = document.getElementById('mode-indicator-pill');
+    if (pill) {
+      pill.className = `mode-indicator-pill ${isEdit ? 'edit' : 'view'}`;
+      const pillText = document.getElementById('mode-pill-text');
+      if (pillText) pillText.textContent = isEdit ? 'Modo Edición' : 'Modo Vista';
+    }
+  }
 }
 
 /* ==========================================================================
@@ -1755,14 +1886,18 @@ export class BeltFlowGame {
     this.selectedTool = 'belt';
     this.placementDir = DIR.RIGHT;
     this.painterColor = PASTEL_COLORS.MINT;
+    this.mode = 'edit'; // 'edit' (Edición) o 'view' (Vista)
 
     const canvas = document.getElementById('game-canvas');
     this.sim = new Simulation(this.grid, (shape, deliveryPiece) => this.onShapeDelivered(shape, deliveryPiece));
     this.renderer = new Renderer(canvas, this.grid, this.sim);
+    this.renderer.game = this;
     this.input = new InputManager(canvas, this);
     this.ui = new UIManager(this);
 
     this.applyLoadedConfig();
+    this.ui.updateModeUI(this.mode);
+    this.updateCanvasCursor();
     this.loadLevel(this.saveData.nivelActual || 1);
 
     // Auto-guardado cada 5 segundos según requerimiento
@@ -1895,7 +2030,27 @@ export class BeltFlowGame {
     };
   }
 
+  toggleMode() {
+    this.mode = this.mode === 'edit' ? 'view' : 'edit';
+    this.ui.updateModeUI(this.mode);
+    this.updateCanvasCursor();
+    this.updateGhost();
+    this.ui.showToast(this.mode === 'view' ? "👁️ Modo Vista: Desplaza y haz zoom libremente" : "✏️ Modo Edición: Coloca y modifica piezas", 1400);
+  }
+
+  updateCanvasCursor() {
+    const canvas = document.getElementById('game-canvas');
+    if (!canvas) return;
+    if (this.mode === 'view') {
+      canvas.classList.add('view-mode');
+    } else {
+      canvas.classList.remove('view-mode');
+    }
+  }
+
   placePieceAt(x, y) {
+    if (this.mode === 'view') return; // En modo vista no se colocan piezas
+
     const existing = this.grid.get(x, y);
     if (existing && existing.fixed) {
       return;
@@ -1906,12 +2061,9 @@ export class BeltFlowGame {
       return;
     }
 
-    // Si ya existe la misma pieza con la misma dirección, rotarla para agilizar juego táctil
-    if (existing && existing.type === this.selectedTool) {
-      if (existing.dir === this.placementDir) {
-        existing.dir = (existing.dir + 1) % 4;
-        this.audio.playRotate();
-        this.updateGhost(x, y);
+    // Si ya existe la misma pieza con la misma dirección y color, no alterar
+    if (existing && existing.type === this.selectedTool && existing.dir === this.placementDir) {
+      if (this.selectedTool !== 'painter' || existing.color === this.painterColor) {
         return;
       }
     }
@@ -1920,7 +2072,7 @@ export class BeltFlowGame {
       x: x,
       y: y,
       type: this.selectedTool,
-      dir: this.placementDir,
+      dir: this.placementDir, // Respetar SIEMPRE y fielmente la orientación de la preview
       color: this.selectedTool === 'painter' ? this.painterColor : null,
       shape: this.selectedTool === 'extractor' ? Shapes.clone(this.currentLevel.targetShape) : null,
       fixed: false
@@ -1932,6 +2084,7 @@ export class BeltFlowGame {
   }
 
   removePieceAt(x, y) {
+    if (this.mode === 'view') return; // En modo vista no se borra
     const removed = this.grid.remove(x, y);
     if (removed) {
       this.audio.playDelete();
