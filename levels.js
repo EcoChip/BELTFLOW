@@ -918,5 +918,609 @@ export const LEVELS = [
       { x: 18, y: 6, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
       { x: 18, y: 14, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
     ]
+  },
+
+  /* ==========================================================================
+     CAPÍTULO 3: VANGUARDIA MECÁNICA (Niveles 41–60)
+     ========================================================================== */
+
+  // Nivel 41: El Divisor Equitativo (Mecánica: Splitter)
+  {
+    id: 41,
+    chapter: 3,
+    name: "El Divisor Equitativo",
+    description: "Usa el Divisor para repartir el flujo de Círculos menta entre dos almacenes de forma alternada.",
+    hint: "El Divisor reparte automáticamente una pieza hacia adelante y otra hacia el lateral alternativamente.",
+    timeLimit: 220,
+    quota: 20,
+    stars: { gold: 65, silver: 105, bronze: 160 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'div_norte_41', name: 'Almacén Norte', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10, deliveryIndex: 0 },
+      { id: 'div_sur_41', name: 'Almacén Sur', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'splitter'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 16, y: 5, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 16, y: 11, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 42: Cruce Cuádruple (Mecánica: Crossing / Puente a nivel)
+  {
+    id: 42,
+    chapter: 3,
+    name: "Cruce Cuádruple",
+    description: "Cruza dos líneas de producción sin que se mezclen utilizando la pieza de Cruce.",
+    hint: "El Cruce permite que dos cintas se intercepten en ángulo recto sin mezclar sus piezas.",
+    timeLimit: 230,
+    quota: 20,
+    stars: { gold: 70, silver: 110, bronze: 170 },
+    targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
+    demands: [
+      { id: 'cruce_cielo_42', name: 'Cuadrados Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10, deliveryIndex: 0 },
+      { id: 'cruce_menta_42', name: 'Círculos Menta', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'crossing'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 7, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 9, y: 2, type: 'mine', dir: 1, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 16, y: 7, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 9, y: 13, type: 'delivery', dir: 3, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 43: El Fusionador (Mecánica: Merger)
+  {
+    id: 43,
+    chapter: 3,
+    name: "El Fusionador",
+    description: "Combina dos líneas de extracción en una única cinta transportadora usando el Fusionador.",
+    hint: "El Fusionador recibe piezas por varios lados y las entrega por su frente sin atascar la cadena.",
+    timeLimit: 210,
+    quota: 24,
+    stars: { gold: 60, silver: 95, bronze: 150 },
+    targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER),
+    demands: [
+      { id: 'fusion_43', name: 'Triángulos Lavanda', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 24 }
+    ],
+    availableTools: ['belt', 'extractor', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 44: Filtro de Colores (Mecánica: Filter)
+  {
+    id: 44,
+    chapter: 3,
+    name: "Filtro de Colores",
+    description: "Separa la corriente mixta: envía las formas color menta hacia la salida Norte y las cielo a la Sur.",
+    hint: "El Filtro deja pasar de frente las piezas coincidentes y desvía al lateral las demás.",
+    hasLives: true,
+    timeLimit: 260,
+    quota: 20,
+    stars: { gold: 80, silver: 125, bronze: 190 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'filtro_menta_44', name: 'Círculo Menta (Norte)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10, deliveryIndex: 0 },
+      { id: 'filtro_cielo_44', name: 'Círculo Cielo (Sur)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), quota: 10, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'filter', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 6, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 16, y: 5, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 16, y: 11, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 45: Selector Geométrico (Mecánica: Shape Filter & Trash)
+  {
+    id: 45,
+    chapter: 3,
+    name: "Selector Geométrico",
+    description: "Filtra los Rombos durazno hacia el almacén y envía los Cuadrados a la trituradora.",
+    hint: "Alinea la salida de desvío del filtro directamente hacia la trituradora.",
+    timeLimit: 240,
+    quota: 14,
+    stars: { gold: 75, silver: 120, bronze: 180 },
+    targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
+    demands: [
+      { id: 'sel_rombo_45', name: 'Rombo Durazno', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 14 }
+    ],
+    availableTools: ['belt', 'extractor', 'filter', 'trash', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 6, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 3, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 46: Presupuesto Ajustado (Objetivo: Piece Budget)
+  {
+    id: 46,
+    chapter: 3,
+    name: "Presupuesto Ajustado",
+    description: "Entrega 12 Estrellas coral utilizando un máximo de 10 componentes colocados.",
+    hint: "Cada cinta y extractor cuenta. Traza la ruta más directa y económica posible.",
+    maxPieces: 10,
+    timeLimit: 200,
+    quota: 12,
+    stars: { gold: 50, silver: 85, bronze: 140 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL),
+    demands: [
+      { id: 'presupuesto_46', name: 'Estrellas Coral (≤10 piezas)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 12 }
+    ],
+    availableTools: ['belt', 'extractor'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 5, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 12, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 47: Cintas Rápidas y Lentas (Mecánica: Fast/Slow Belts)
+  {
+    id: 47,
+    chapter: 3,
+    name: "Autopista y Paseo",
+    description: "Usa cintas rápidas para recorrer la larga distancia central y cintas lentas en la entrada para regular el flujo.",
+    hint: "Las cintas rápidas mueven las piezas a doble velocidad, ideales para largas rectas.",
+    timeLimit: 190,
+    quota: 16,
+    stars: { gold: 55, silver: 90, bronze: 145 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'rapida_47', name: 'Círculos Acelerados', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 16 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'belt_slow', 'extractor'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 2, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 18, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 48: El Estanque del Loto (Obstáculo de Agua y Puentes)
+  {
+    id: 48,
+    chapter: 3,
+    name: "El Estanque del Loto",
+    description: "Un estanque de agua cristalina bloquea el paso directo. Cruza el río construyendo un cruce o túnel sobre el agua.",
+    hint: "Los cruces actúan como puentes sobre el agua y los túneles permiten pasar por debajo.",
+    timeLimit: 240,
+    quota: 15,
+    stars: { gold: 75, silver: 115, bronze: 175 },
+    targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
+    demands: [
+      { id: 'estanque_48', name: 'Cuadrados Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 15 }
+    ],
+    availableTools: ['belt', 'extractor', 'crossing', 'tunnel'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 8, y: 4, type: 'water', fixed: true },
+      { x: 8, y: 5, type: 'water', fixed: true },
+      { x: 8, y: 6, type: 'water', fixed: true },
+      { x: 8, y: 7, type: 'water', fixed: true },
+      { x: 8, y: 8, type: 'water', fixed: true },
+      { x: 8, y: 9, type: 'water', fixed: true },
+      { x: 8, y: 10, type: 'water', fixed: true },
+      { x: 8, y: 11, type: 'water', fixed: true },
+      { x: 8, y: 12, type: 'water', fixed: true },
+      { x: 15, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 49: Almacén Pulmón (Mecánica: Buffer)
+  {
+    id: 49,
+    chapter: 3,
+    name: "Almacén Pulmón",
+    description: "Coloca un Buffer para retener formas y alimentar de manera suave y continua la estación de pintura.",
+    hint: "El Buffer acumula hasta 6 piezas y las va liberando ordenadamente a medida que la salida tiene espacio.",
+    timeLimit: 240,
+    quota: 15,
+    stars: { gold: 80, silver: 125, bronze: 185 },
+    targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL),
+    demands: [
+      { id: 'buffer_49', name: 'Triángulos Coral Pintados', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL), quota: 15 }
+    ],
+    availableTools: ['belt', 'extractor', 'buffer', 'painter'],
+    allowedColors: [PASTEL_COLORS.CORAL],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 50: Portales Gemelos (Mecánica: Portal Teleportation)
+  {
+    id: 50,
+    chapter: 3,
+    name: "Portales Gemelos",
+    description: "Una cordillera de rocas divide el mapa. Introduce las piezas en el Portal A1 para que salgan por el Portal A2.",
+    hint: "Los portales enlazados transportan instantáneamente cualquier forma sin ocupar espacio en la superficie.",
+    timeLimit: 220,
+    quota: 16,
+    stars: { gold: 70, silver: 110, bronze: 170 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER),
+    demands: [
+      { id: 'portal_50', name: 'Estrellas Lavanda Cuánticas', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 16 }
+    ],
+    availableTools: ['belt', 'extractor', 'splitter'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 7, y: 8, type: 'portal', portalId: 'A1', targetPortal: 'A2', dir: 0, fixed: true },
+      // Muro rocoso
+      { x: 9, y: 4, type: 'rock', fixed: true },
+      { x: 9, y: 5, type: 'rock', fixed: true },
+      { x: 9, y: 6, type: 'rock', fixed: true },
+      { x: 9, y: 7, type: 'rock', fixed: true },
+      { x: 9, y: 8, type: 'rock', fixed: true },
+      { x: 9, y: 9, type: 'rock', fixed: true },
+      { x: 9, y: 10, type: 'rock', fixed: true },
+      { x: 9, y: 11, type: 'rock', fixed: true },
+      { x: 9, y: 12, type: 'rock', fixed: true },
+      { x: 12, y: 5, type: 'portal', portalId: 'A2', targetPortal: 'A1', dir: 0, fixed: true },
+      { x: 17, y: 5, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 51: Reparación de Fábrica (Puzzle de Reparación)
+  {
+    id: 51,
+    chapter: 3,
+    name: "Línea Averiada",
+    description: "Un taller antiguo tiene cintas desorientadas y tramos desconectados. ¡Repáralo y ponlo a funcionar!",
+    hint: "Pulsa sobre las cintas incorrectas para corregir su orientación hacia la salida.",
+    timeLimit: 200,
+    quota: 12,
+    stars: { gold: 50, silver: 85, bronze: 135 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'repair_51', name: 'Círculos Restaurados', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 12 }
+    ],
+    availableTools: ['belt', 'extractor', 'erase'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 4, y: 8, type: 'extractor', dir: 0, fixed: false },
+      { x: 5, y: 8, type: 'belt', dir: 1, fixed: false }, // Apunta abajo erróneamente
+      { x: 6, y: 9, type: 'belt', dir: 3, fixed: false },
+      { x: 8, y: 8, type: 'belt', dir: 2, fixed: false }, // Apunta al revés
+      { x: 10, y: 8, type: 'belt', dir: 0, fixed: false },
+      { x: 14, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 52: Cinta Giratoria (Elemento Dinámico de Mapa)
+  {
+    id: 52,
+    chapter: 3,
+    name: "La Compuerta Giratoria",
+    description: "Una cinta automática en el centro rota periódicamente. Sincroniza tus líneas para aprovechar ambas salidas.",
+    hint: "La cinta central cambia cada 4 segundos; aprovecha cada ciclo o usa buffers para regular.",
+    timeLimit: 260,
+    quota: 20,
+    stars: { gold: 85, silver: 135, bronze: 200 },
+    targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
+    demands: [
+      { id: 'giratoria_norte_52', name: 'Salida Norte', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 10, deliveryIndex: 0 },
+      { id: 'giratoria_este_52', name: 'Salida Este', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 10, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'buffer'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 9, y: 8, type: 'switching_belt', dir: 0, altDir: 3, interval: 4.0, fixed: true },
+      { x: 9, y: 4, type: 'delivery', dir: 1, fixed: true, deliveryIndex: 0 },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 53: Ritmo Sostenido (Objetivo de Velocidad de Flujo)
+  {
+    id: 53,
+    chapter: 3,
+    name: "Ritmo Sostenido",
+    description: "Alcanza una tasa de entrega continua de al menos 1.2 piezas/segundo durante 10 segundos.",
+    hint: "Multiplica tus extractores y acelera las entregas con cintas rápidas para mantener el medidor de flujo al máximo.",
+    targetRate: 1.2,
+    rateDuration: 10,
+    timeLimit: 240,
+    quota: 25,
+    stars: { gold: 60, silver: 100, bronze: 160 },
+    targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
+    demands: [
+      { id: 'ritmo_53', name: 'Flujo Continuo (≥1.2/s)', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 25 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'extractor', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 54: Laberinto Rocoso (Rocas + Divisores + Cruces)
+  {
+    id: 54,
+    chapter: 3,
+    name: "Laberinto Rocoso",
+    description: "Un jardín con rocas densas exige maniobras de precisión con divisores y cruces.",
+    hint: "Traza pasillos alternativos y cruza las líneas perpendicularmente.",
+    timeLimit: 280,
+    quota: 22,
+    stars: { gold: 95, silver: 155, bronze: 235 },
+    targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER),
+    demands: [
+      { id: 'rocas_54', name: 'Triángulos Lavanda', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 22 }
+    ],
+    availableTools: ['belt', 'extractor', 'splitter', 'crossing', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 7, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 7, y: 6, type: 'rock', fixed: true },
+      { x: 7, y: 7, type: 'rock', fixed: true },
+      { x: 7, y: 8, type: 'rock', fixed: true },
+      { x: 10, y: 5, type: 'rock', fixed: true },
+      { x: 10, y: 9, type: 'rock', fixed: true },
+      { x: 16, y: 7, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 55: Doble Portal y Filtro Mixto (Portales + Filtros)
+  {
+    id: 55,
+    chapter: 3,
+    name: "Doble Portal y Filtro Mixto",
+    description: "Teletransporta las formas bicolores por portales y clasifícalas con filtros especializados hacia cada salida (5 ❤️).",
+    hint: "Instala un filtro a la salida del portal para separar limpiamente cada componente sin pérdidas.",
+    hasLives: true,
+    timeLimit: 300,
+    quota: 24,
+    stars: { gold: 100, silver: 160, bronze: 245 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL),
+    demands: [
+      { id: 'portal_estrella_55', name: 'Estrellas Coral (Norte)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 12, deliveryIndex: 0 },
+      { id: 'portal_circulo_55', name: 'Círculos Menta (Sur)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 12, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'filter', 'merger', 'crossing'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 6, y: 8, type: 'portal', portalId: 'B1', targetPortal: 'B2', dir: 0, fixed: true },
+      { x: 11, y: 8, type: 'portal', portalId: 'B2', targetPortal: 'B1', dir: 0, fixed: true },
+      { x: 17, y: 4, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 17, y: 12, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 56: Ingeniería Minimalista (Presupuesto de 14 piezas)
+  {
+    id: 56,
+    chapter: 3,
+    name: "Ingeniería Minimalista",
+    description: "Abastece dos demandas con un presupuesto muy estricto de máximo 14 piezas.",
+    hint: "El uso eficiente de divisores y curvas compactas es clave para no agotar el presupuesto.",
+    maxPieces: 14,
+    timeLimit: 240,
+    quota: 18,
+    stars: { gold: 75, silver: 120, bronze: 185 },
+    targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
+    demands: [
+      { id: 'min_rombo_56', name: 'Rombo Norte', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 9, deliveryIndex: 0 },
+      { id: 'min_rombo_sur_56', name: 'Rombo Sur', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 9, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'extractor', 'splitter'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 4, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: true },
+      { x: 14, y: 6, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 14, y: 10, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 57: Arreglo del Complejo Sur (Reparación de Pintor y Mezcladora)
+  {
+    id: 57,
+    chapter: 3,
+    name: "Arreglo del Complejo Sur",
+    description: "Restaura la cadena de producción semiderruida: alinea los pintores y conecta la mezcladora.",
+    hint: "Inspecciona las direcciones de entrada del pintor y la mezcladora para reactivar el proceso.",
+    timeLimit: 260,
+    quota: 15,
+    stars: { gold: 85, silver: 135, bronze: 205 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
+    demands: [
+      { id: 'rep_combo_57', name: 'Círculo-Cuadrado Reparado', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 15 }
+    ],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'erase'],
+    allowedColors: [PASTEL_COLORS.SKY],
+    fixedGrid: [
+      { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 7, y: 11, type: 'painter', dir: 0, color: PASTEL_COLORS.SKY, fixed: false },
+      { x: 12, y: 8, type: 'mixer', dir: 0, fixed: false },
+      { x: 17, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 58: Autopista de Cintas (Cruce Múltiple y Cintas Rápidas)
+  {
+    id: 58,
+    chapter: 3,
+    name: "Autopista de Cintas",
+    description: "Entrega simultánea de 3 recursos cruzando rutas a máxima velocidad sin colisiones.",
+    hint: "Combina cintas rápidas en los ejes principales y cruces para evitar todo tipo de atasco.",
+    timeLimit: 300,
+    quota: 30,
+    stars: { gold: 95, silver: 155, bronze: 235 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL),
+    demands: [
+      { id: 'auto_estrella_58', name: 'Estrellas Coral', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 10, deliveryIndex: 0 },
+      { id: 'auto_triangulo_58', name: 'Triángulos Lavanda', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 10, deliveryIndex: 1 },
+      { id: 'auto_circulo_58', name: 'Círculos Menta', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10, deliveryIndex: 2 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'extractor', 'crossing', 'merger'],
+    allowedColors: [],
+    fixedGrid: [
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 17, y: 4, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 17, y: 8, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 },
+      { x: 17, y: 12, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 2 }
+    ]
+  },
+
+  // Nivel 59: Sinfonía Pentatónica (Complejo Industrial Supremo)
+  {
+    id: 59,
+    chapter: 3,
+    name: "Sinfonía Pentatónica",
+    description: "Procesa y entrega 3 obras de arte geométricas: formas cortadas, pintadas y combinadas en armonía (5 ❤️).",
+    hint: "Organiza las secciones en módulos limpios: corte al norte, pintura al centro y combinación al sur.",
+    hasLives: true,
+    timeLimit: 340,
+    quota: 30,
+    stars: { gold: 110, silver: 180, bronze: 270 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'sinf_1_59', name: 'Estrella-Círculo Bicolor', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10 },
+      { id: 'sinf_2_59', name: 'Cuadrado Cielo Pulido', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 },
+      { id: 'sinf_3_59', name: 'Rombo Lavanda Pintado', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 10 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'extractor', 'cutter', 'painter', 'mixer', 'splitter', 'crossing', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL, PASTEL_COLORS.LAVENDER],
+    fixedGrid: [
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
+      { x: 3, y: 16, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 18, y: 6, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 18, y: 14, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 60: El Jardín Infinito (Gran Maestro de BeltFlow - Sandbox Zen Supremo)
+  {
+    id: 60,
+    chapter: 3,
+    name: "El Jardín Infinito",
+    description: "El zenit de la automatización zen: diseña tu obra maestra con todas las herramientas de BeltFlow sin límites de tiempo.",
+    hint: "Sin cronómetro ni vidas. Construye a tu propio ritmo la fábrica más relajante, armónica y perfecta del universo.",
+    hasLives: false,
+    timeLimit: null,
+    quota: 40,
+    stars: { gold: 130, silver: 220, bronze: 350 },
+    targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
+    demands: [
+      { id: 'd60_1', name: 'Estrella / Rombo Coral-Durazno', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 10 },
+      { id: 'd60_2', name: 'Círculo / Cuadrado Menta-Cielo', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 },
+      { id: 'd60_3', name: 'Triángulo Lavanda Puro', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 10 },
+      { id: 'd60_4', name: 'Rombo / Estrella Cielo-Coral', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY, SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 10 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'belt_slow', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'splitter', 'merger', 'filter', 'crossing', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
+    fixedGrid: [
+      { x: 3, y: 3, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: false },
+      { x: 3, y: 7, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), fixed: false },
+      { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: false },
+      { x: 3, y: 15, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: false },
+      { x: 3, y: 19, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), fixed: false },
+      { x: 19, y: 5, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 19, y: 11, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 },
+      { x: 19, y: 17, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 2 }
+    ]
   }
+];
+
+/* ==========================================================================
+   BIOMAS POR CAPÍTULO
+   ========================================================================== */
+export const BIOMES = {
+  1: {
+    id: 'invernadero',
+    chapter: 1,
+    name: "Invernadero Botánico",
+    levels: "1–20",
+    particleType: 'pollen',
+    themeColor: '#A8D5BA',
+    description: "Brisa suave, polen dorado flotante y tonos menta relajantes."
+  },
+  2: {
+    id: 'zen',
+    chapter: 2,
+    name: "Taller Zen & Cristal Ártico",
+    levels: "21–40",
+    particleType: 'snow',
+    themeColor: '#A9CCE3',
+    description: "Ondas de arena zen, quietud invernal y copos translúcidos."
+  },
+  3: {
+    id: 'cuarzo',
+    chapter: 3,
+    name: "Desierto de Cuarzo & Fábrica Nocturna",
+    levels: "41–60",
+    particleType: 'fireflies',
+    themeColor: '#C9B6E4',
+    description: "Tonos lavanda y cuarzo, destellos de luciérnagas y maquinaria armónica."
+  }
+};
+
+/* ==========================================================================
+   ASPECTOS COSMÉTICOS (Cosmetic Skins)
+   ========================================================================== */
+export const COSMETIC_SKINS = [
+  { id: 'default', name: 'Cinta Clásica', cost: 0, desc: 'Diseño industrial estándar anti-fatiga' },
+  { id: 'skin_bamboo', name: 'Bambú Zen', cost: 15, desc: 'Acabado en madera suave con vetas naturales' },
+  { id: 'skin_sakura', name: 'Flor de Cerezo', cost: 25, desc: 'Tonalidades pétalo de cerezo y ribetes suaves' },
+  { id: 'skin_cyber', name: 'Menta Cuántica', cost: 35, desc: 'Líneas depuradas con pulsos translúcidos de luz' },
+  { id: 'skin_gold', name: 'Oro Satinado', cost: 50, desc: 'Brillo cálido mate reservado a los grandes maestros' }
+];
+
+/* ==========================================================================
+   LOGROS (Achievements)
+   ========================================================================== */
+export const ACHIEVEMENTS = [
+  { id: 'first_belt', icon: '🛤️', name: "Primeros Pasos", desc: "Coloca tu primera cinta transportadora." },
+  { id: 'level_5', icon: '🌱', name: "Explorador", desc: "Supera los primeros 5 niveles." },
+  { id: 'chapter_1', icon: '🌿', name: "Graduado del Invernadero", desc: "Completa el Capítulo 1 (Nivel 20)." },
+  { id: 'chapter_2', icon: '❄️', name: "Maestro Zen", desc: "Completa el Capítulo 2 (Nivel 40)." },
+  { id: 'chapter_3', icon: '🌌', name: "Gran Ingeniero Universal", desc: "Completa el Capítulo 3 (Nivel 60)." },
+  { id: 'splitter_pro', icon: '🔀', name: "División Justa", desc: "Entrega 50 piezas divididas equitativamente." },
+  { id: 'crossing_ace', icon: '➕', name: "Cruce Sin Accidentes", desc: "Transporta 100 piezas a través de cruces." },
+  { id: 'filter_master', icon: '🎯', name: "Clasificador Supremo", desc: "Filtra 50 piezas usando selectores." },
+  { id: 'zero_trash', icon: '🍃', name: "Cero Desperdicio", desc: "Supera un nivel sin usar trituradora." },
+  { id: 'speed_demon', icon: '⚡', name: "Fiebre de Velocidad", desc: "Alcanza una tasa de producción de 1.5 piezas/s." },
+  { id: 'budget_hero', icon: '📐', name: "Minimalismo Industrial", desc: "Supera un nivel cumpliendo el objetivo de presupuesto." },
+  { id: 'repairman', icon: '🔧', name: "Manitas de Fábrica", desc: "Resuelve tu primer nivel de reparación." },
+  { id: 'portal_traveler', icon: '🌀', name: "Salto Cuántico", desc: "Teletransporta 50 formas a través de portales." },
+  { id: 'buffer_full', icon: '📦', name: "Almacén Lleno", desc: "Llena un buffer al máximo de su capacidad (6 piezas)." },
+  { id: 'gold_hunter_5', icon: '🥇', name: "Buscador de Oro", desc: "Consigue calificación Oro en 5 niveles." },
+  { id: 'gold_hunter_20', icon: '🏆', name: "Tesoro Brillante", desc: "Consigue calificación Oro en 20 niveles." },
+  { id: 'gold_hunter_40', icon: '👑', name: "Perfeccionista Dorado", desc: "Consigue calificación Oro en 40 niveles." },
+  { id: 'streak_20', icon: '✨', name: "Cadena Perfecta", desc: "Alcanza una racha continua de 20 entregas sin fallos." },
+  { id: 'streak_50', icon: '💫', name: "Flujo Infinito", desc: "Alcanza una racha continua de 50 entregas." },
+  { id: 'painter_guru', icon: '🎨', name: "Arcoíris Suave", desc: "Pinta piezas con los 5 colores pastel." },
+  { id: 'mixer_virtuoso', icon: '⚗️', name: "Alquimista Geométrico", desc: "Combina 50 formas compuestas en la mezcladora." },
+  { id: 'cutter_precision', icon: '✂️', name: "Bisturí de Precisión", desc: "Corta 50 formas en mitades perfectas." },
+  { id: 'star_collector_50', icon: '⭐', name: "Cielo Estrellado", desc: "Acumula 50 estrellas en total." },
+  { id: 'star_collector_120', icon: '🌟', name: "Constelación Suprema", desc: "Acumula 120 estrellas." },
+  { id: 'cosmetic_enthusiast', icon: '🎀', name: "Estilo Personalizado", desc: "Desbloquea y equipa tu primer aspecto cosmético." }
 ];

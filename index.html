@@ -44,7 +44,19 @@
           </button>
           <button id="menu-btn-levels" class="menu-btn">
             <span class="menu-btn-icon">☰</span>
-            <span class="menu-btn-text">Seleccionar Nivel (40)</span>
+            <span class="menu-btn-text">Seleccionar Nivel (60)</span>
+          </button>
+          <button id="menu-btn-achievements" class="menu-btn">
+            <span class="menu-btn-icon">🏆</span>
+            <span class="menu-btn-text">Logros (25)</span>
+          </button>
+          <button id="menu-btn-shop" class="menu-btn">
+            <span class="menu-btn-icon">🎀</span>
+            <span class="menu-btn-text">Aspectos & Monedas</span>
+          </button>
+          <button id="menu-btn-editor" class="menu-btn">
+            <span class="menu-btn-icon">🛠️</span>
+            <span class="menu-btn-text">Editor Web</span>
           </button>
           <button id="menu-btn-settings" class="menu-btn">
             <span class="menu-btn-icon">⚙</span>
@@ -58,10 +70,11 @@
 
         <div class="menu-footer">
           <div class="menu-stats">
-            <span class="menu-stat-item" id="menu-total-stars">⭐ 0/120</span>
-            <span class="menu-stat-item" id="menu-total-levels">🏆 0/40</span>
+            <span class="menu-stat-item" id="menu-total-stars">⭐ 0/180</span>
+            <span class="menu-stat-item" id="menu-total-levels">🏆 0/60</span>
+            <span class="menu-stat-item" id="menu-coins">🪙 0</span>
           </div>
-          <span class="menu-version">v2.0 • Diseñado para la calma visual</span>
+          <span class="menu-version">v3.0 • Gran Actualización Zen & Mecánicas</span>
         </div>
       </aside>
 
@@ -115,6 +128,22 @@
         </div>
       </div>
 
+      <!-- Presupuesto de componentes (Nivel con límite de piezas) -->
+      <div class="hud-panel" id="hud-budget-panel" style="display: none;">
+        <div class="stat-pill-box" title="Presupuesto de componentes">
+          <span class="pill-badge-label">Piezas</span>
+          <span class="pill-badge-value mono" id="hud-budget-display">0 / 10</span>
+        </div>
+      </div>
+
+      <!-- Tasa de flujo continuo en tiempo real (Nivel de velocidad sostenida) -->
+      <div class="hud-panel" id="hud-rate-panel" style="display: none;">
+        <div class="stat-pill-box" title="Tasa de entrega sostenida (piezas por segundo)">
+          <span class="pill-badge-label">Ritmo</span>
+          <span class="pill-badge-value mono" id="hud-rate-display">0.0 /s</span>
+        </div>
+      </div>
+
       <!-- Vidas (Niveles avanzados 31+) -->
       <div class="hud-panel lives-panel" id="lives-panel" style="display: none;">
         <div class="lives-box" title="Vidas restantes (las formas incorrectas restan vidas)">
@@ -139,11 +168,33 @@
           </svg>
         </button>
 
+        <!-- Alternador Modo Zen 🍃 / Desafío ⚡ -->
+        <button id="btn-zen-toggle" class="mode-toggle-btn zen" title="Alternar Modo Zen (Relajado, sin vidas ni cronómetro) / Desafío" aria-label="Modo Zen/Desafío">
+          <span class="mode-toggle-icon" id="zen-toggle-icon">🍃</span>
+          <span class="mode-toggle-label" id="zen-toggle-label">Zen</span>
+        </button>
+
         <!-- Alternador Modo Vista / Edición (Tecla Q) -->
         <button id="btn-mode-toggle" class="mode-toggle-btn edit" title="Alternar Modo Vista / Edición (Tecla Q)" aria-label="Modo Vista / Edición">
           <span class="mode-toggle-icon" id="mode-toggle-icon">✏️</span>
           <span class="mode-toggle-label" id="mode-toggle-label">Edición</span>
           <span class="mode-toggle-key mono">Q</span>
+        </button>
+
+        <!-- Deshacer (Ctrl+Z) -->
+        <button id="btn-undo" class="icon-btn" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+          </svg>
+        </button>
+
+        <!-- Rehacer (Ctrl+Y) -->
+        <button id="btn-redo" class="icon-btn" title="Rehacer (Ctrl+Y)" aria-label="Rehacer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 7v6h-6"></path>
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+          </svg>
         </button>
 
         <!-- Pausa / Reanudar -->
@@ -410,6 +461,94 @@
           <span class="tool-name">Túnel</span>
         </button>
 
+        <!-- 9: Divisor -->
+        <button class="tool-card" data-tool="splitter" title="Divisor / Splitter (Tecla 9)">
+          <span class="tool-badge">9</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M6 3v12"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <path d="M18 9a9 9 0 0 1-9 9"></path>
+            </svg>
+          </div>
+          <span class="tool-name">Divisor</span>
+        </button>
+
+        <!-- 0: Fusionador -->
+        <button class="tool-card" data-tool="merger" title="Fusionador / Merger (Tecla 0)">
+          <span class="tool-badge">0</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18 21V9"></path>
+              <circle cx="18" cy="6" r="3"></circle>
+              <path d="M6 15a9 9 0 0 0 9-9"></path>
+            </svg>
+          </div>
+          <span class="tool-name">Fusiona</span>
+        </button>
+
+        <!-- Filtro -->
+        <button class="tool-card" data-tool="filter" title="Filtro / Selector (Tecla F)">
+          <span class="tool-badge">F</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+          </div>
+          <span class="tool-name">Filtro</span>
+        </button>
+
+        <!-- Cruce -->
+        <button class="tool-card" data-tool="crossing" title="Cruce / Puente a nivel (Tecla C)">
+          <span class="tool-badge">C</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="12" y1="2" x2="12" y2="22"></line>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Cruce</span>
+        </button>
+
+        <!-- Cinta Rápida -->
+        <button class="tool-card" data-tool="belt_fast" title="Cinta Rápida 2x (Tecla Shift+1)">
+          <span class="tool-badge">⚡</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="13 17 18 12 13 7"></polyline>
+              <polyline points="6 17 11 12 6 7"></polyline>
+            </svg>
+          </div>
+          <span class="tool-name">Rápida</span>
+        </button>
+
+        <!-- Cinta Lenta -->
+        <button class="tool-card" data-tool="belt_slow" title="Cinta Lenta 0.5x (Tecla Alt+1)">
+          <span class="tool-badge">🐢</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </div>
+          <span class="tool-name">Lenta</span>
+        </button>
+
+        <!-- Buffer -->
+        <button class="tool-card" data-tool="buffer" title="Almacén Buffer (Tecla B)">
+          <span class="tool-badge">B</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <circle cx="15.5" cy="8.5" r="1.5"></circle>
+              <circle cx="8.5" cy="15.5" r="1.5"></circle>
+              <circle cx="15.5" cy="15.5" r="1.5"></circle>
+            </svg>
+          </div>
+          <span class="tool-name">Buffer</span>
+        </button>
+
         <!-- 8: Borrador -->
         <button class="tool-card" data-tool="erase" title="Modo demolición (Tecla 8)">
           <span class="tool-badge">8</span>
@@ -484,10 +623,77 @@
           <div class="levels-tabs" id="levels-tabs">
             <button class="level-tab-btn active" id="tab-chapter-1">Capítulo 1: Fundamentos (1–20)</button>
             <button class="level-tab-btn" id="tab-chapter-2">Capítulo 2: Maestría (21–40)</button>
+            <button class="level-tab-btn" id="tab-chapter-3">Capítulo 3: Vanguardia (41–60)</button>
           </div>
           <div class="levels-grid" id="levels-grid-container">
             <!-- Rellenado dinámicamente con los niveles y estrellas -->
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Logros (25 logros) -->
+    <div class="modal-overlay" id="achievements-modal">
+      <div class="modal-card achievements-card">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🏆</span>
+            <h2 class="modal-title heading">Logros de Automatización</h2>
+          </div>
+          <button class="modal-close-btn" id="btn-close-achievements" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="achievements-summary" id="achievements-summary">
+            <span>Completados: <strong id="achievements-count">0 / 25</strong></span>
+            <span>Monedas ganadas: <strong id="achievements-coins">0 🪙</strong></span>
+          </div>
+          <div class="achievements-grid" id="achievements-grid-container">
+            <!-- Rellenado dinámicamente con los 25 logros -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Taller Cosmético -->
+    <div class="modal-overlay" id="shop-modal">
+      <div class="modal-card shop-card">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🎀</span>
+            <h2 class="modal-title heading">Taller Cosmético & Skins</h2>
+          </div>
+          <button class="modal-close-btn" id="btn-close-shop" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="shop-balance-bar">
+            <span>Tus Monedas de Estrella:</span>
+            <strong class="shop-balance-val mono" id="shop-coins-val">🪙 0</strong>
+          </div>
+          <p class="aesthetic-desc">Desbloquea aspectos artesanales para tus cintas transportadoras usando monedas obtenidas al ganar estrellas y logros:</p>
+          <div class="shop-grid" id="shop-grid-container">
+            <!-- Rellenado dinámicamente -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Editor de Niveles -->
+    <div class="modal-overlay" id="editor-modal">
+      <div class="modal-card editor-card">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🛠️</span>
+            <h2 class="modal-title heading">Editor de Niveles Web</h2>
+          </div>
+          <button class="modal-close-btn" id="btn-close-editor" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="aesthetic-desc">Exporta tu fábrica actual en un código Base64 para compartirla con la comunidad o importa niveles creados por otros:</p>
+          <div class="editor-actions-box">
+            <button id="btn-editor-export" class="btn btn-primary">📤 Exportar Nivel Actual</button>
+            <button id="btn-editor-import" class="btn btn-secondary">📥 Importar Código</button>
+          </div>
+          <textarea id="editor-code-box" class="editor-code-area mono" placeholder="Pega aquí un código de nivel en Base64 o pulsa Exportar..." rows="4"></textarea>
         </div>
       </div>
     </div>

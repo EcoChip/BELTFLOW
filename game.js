@@ -14,13 +14,14 @@
  * - BeltFlowGame: Controlador principal del ciclo de vida del juego
  */
 
-import { LEVELS, SHAPE_TYPES, PASTEL_COLORS, COLOR_HEX, createShape } from './levels.js';
+import { LEVELS, SHAPE_TYPES, PASTEL_COLORS, COLOR_HEX, createShape, BIOMES, ACHIEVEMENTS, COSMETIC_SKINS } from './levels.js';
 
 /* ==========================================================================
    1. GESTOR DE GUARDADO (SaveManager)
    ========================================================================== */
 export class SaveManager {
-  static STORAGE_KEY = 'beltflow_save_v1';
+  static STORAGE_KEY = 'beltflow_save_v2';
+  static LEGACY_KEY = 'beltflow_save_v1';
 
   static getDefaultSave() {
     return {
@@ -28,6 +29,15 @@ export class SaveManager {
       nivelesCompletados: [],
       mejoresTiempos: {},
       estrellas: {},
+      coins: 0,
+      cosmetics: {
+        beltSkin: 'default',
+        shapeTheme: 'default'
+      },
+      unlockedCosmetics: ['default'],
+      achievements: [],
+      gameMode: 'relaxed', // 'relaxed' (default) o 'challenge'
+      customLevels: [],
       config: {
         modoOscuro: false,
         zoom: 1.0,
@@ -35,7 +45,8 @@ export class SaveManager {
         reducirMovimiento: false,
         sonido: true,
         volumen: 0.8,
-        palettePreset: 'suave'
+        palettePreset: 'suave',
+        ambientMusic: true
       },
       construcciones: {}
     };
@@ -43,18 +54,47 @@ export class SaveManager {
 
   static load() {
     try {
-      const data = localStorage.getItem(SaveManager.STORAGE_KEY);
+      let data = localStorage.getItem(SaveManager.STORAGE_KEY);
+      let isMigrated = false;
+
+      // Migración hacia v2 desde v1 si v2 no existe aún
+      if (!data) {
+        const legacyData = localStorage.getItem(SaveManager.LEGACY_KEY);
+        if (legacyData) {
+          data = legacyData;
+          isMigrated = true;
+        }
+      }
+
       if (!data) return SaveManager.getDefaultSave();
       const parsed = JSON.parse(data);
-      return {
-        ...SaveManager.getDefaultSave(),
+      const def = SaveManager.getDefaultSave();
+
+      const merged = {
+        ...def,
         ...parsed,
-        config: { ...SaveManager.getDefaultSave().config, ...(parsed.config || {}) },
+        config: { ...def.config, ...(parsed.config || {}) },
+        cosmetics: { ...def.cosmetics, ...(parsed.cosmetics || {}) },
+        unlockedCosmetics: parsed.unlockedCosmetics || def.unlockedCosmetics,
+        achievements: parsed.achievements || [],
+        coins: parsed.coins !== undefined ? parsed.coins : 0,
+        gameMode: parsed.gameMode || 'relaxed',
+        customLevels: parsed.customLevels || [],
         construcciones: parsed.construcciones || {},
         mejoresTiempos: parsed.mejoresTiempos || {},
         estrellas: parsed.estrellas || {},
         nivelesCompletados: parsed.nivelesCompletados || []
       };
+
+      // Si migramos por primera vez, calcular monedas iniciales
+      if (isMigrated && merged.coins === 0 && merged.estrellas) {
+        let starsSum = 0;
+        Object.values(merged.estrellas).forEach(s => starsSum += (s || 0));
+        merged.coins = starsSum * 10;
+        SaveManager.save(merged);
+      }
+
+      return merged;
     } catch (e) {
       console.warn("BeltFlow: Error al cargar de localStorage, usando valores por defecto.", e);
       return SaveManager.getDefaultSave();
@@ -72,6 +112,7 @@ export class SaveManager {
   static reset() {
     try {
       localStorage.removeItem(SaveManager.STORAGE_KEY);
+      localStorage.removeItem(SaveManager.LEGACY_KEY);
     } catch (e) {
       console.warn("BeltFlow: Error al reiniciar partida.", e);
     }
@@ -257,6 +298,62 @@ export class AudioManager {
     const chord = [523.25, 659.25, 783.99, 1046.50];
     chord.forEach((freq, i) => {
       setTimeout(() => this.playTone(freq, 'triangle', 0.65, 0.07, 0.03), i * 110);
+    });
+  }
+
+  playAmbientChime(biomeIndex = 1) {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const scales = {
+      1: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25], // C mayor pentatónica (Invernadero)
+      2: [349.23, 392.00, 440.00, 523.25, 587.33, 698.46], // F mayor pentatónica (Zen / Nieve)
+      3: [311.13, 349.23, 392.00, 466.16, 523.25, 622.25]  // Eb mayor pentatónica (Cuarzo / Noche)
+    };
+    const scale = scales[biomeIndex] || scales[1];
+    const n1 = scale[Math.floor(Math.random() * scale.length)];
+    const n2 = scale[Math.floor(Math.random() * scale.length)];
+    const n3 = scale[Math.floor(Math.random() * scale.length)];
+
+    [n1, n2, n3].forEach((freq, idx) => {
+      setTimeout(() => {
+        try {
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.018, now + 0.9);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
+
+          osc.connect(gain);
+          gain.connect(this.masterGain || this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 4.0);
+        } catch (e) {}
+      }, idx * 180);
+    });
+  }
+
+  playSplitter() {
+    this.playTone(493.88, 'sine', 0.08, 0.03);
+    setTimeout(() => this.playTone(659.25, 'triangle', 0.08, 0.025), 35);
+  }
+
+  playPortal() {
+    const chord = [440, 554.37, 659.25];
+    chord.forEach((freq, i) => {
+      setTimeout(() => this.playTone(freq, 'sine', 0.35, 0.03, 0.05), i * 40);
+    });
+  }
+
+  playAchievement() {
+    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+    notes.forEach((f, i) => {
+      setTimeout(() => this.playTone(f, 'triangle', 0.32, 0.05, 0.02), i * 75);
     });
   }
 }
@@ -579,12 +676,28 @@ export class Simulation {
     this.nextItemId = 1;
     this.spawnerTimers = new Map();
     this.machineAnims = [];
+    this.deliveryTimestamps = [];
+    this.currentThroughputRate = 0.0;
+    this.rateSustainedTimer = 0.0;
+    this.totalTrashDestroyed = 0;
+    this.totalPortalsTraversed = 0;
+    this.totalCrossingsTraversed = 0;
+    this.totalFiltersProcessed = 0;
+    this.totalSplittersProcessed = 0;
   }
 
   reset() {
     this.items = [];
     this.spawnerTimers.clear();
     this.machineAnims = [];
+    this.deliveryTimestamps = [];
+    this.currentThroughputRate = 0.0;
+    this.rateSustainedTimer = 0.0;
+    this.totalTrashDestroyed = 0;
+    this.totalPortalsTraversed = 0;
+    this.totalCrossingsTraversed = 0;
+    this.totalFiltersProcessed = 0;
+    this.totalSplittersProcessed = 0;
   }
 
   triggerMachineAnim(x, y, type, data = {}) {
@@ -600,13 +713,34 @@ export class Simulation {
 
   update(dt, speedMult = 1.0) {
     const effectiveDt = dt * speedMult;
-    const beltSpeed = 1.5; // Celdas por segundo
+    const beltSpeed = 1.5; // Celdas por segundo estándar
 
     // Limpiar micro-animaciones expiradas
     const nowMs = performance.now();
     for (let k = this.machineAnims.length - 1; k >= 0; k--) {
       if (nowMs - this.machineAnims[k].startTime > this.machineAnims[k].duration) {
         this.machineAnims.splice(k, 1);
+      }
+    }
+
+    // Calcular tasa de entrega en ventana de 10s
+    const nowSec = nowMs / 1000;
+    this.deliveryTimestamps = (this.deliveryTimestamps || []).filter(t => nowSec - t <= 10.0);
+    this.currentThroughputRate = this.deliveryTimestamps.length / 10.0;
+
+    // Actualizar elementos dinámicos de mapa: Cintas Giratorias (switching_belt)
+    for (const piece of this.grid.getAllPieces()) {
+      if (piece.type === 'switching_belt') {
+        piece.switchTimer = (piece.switchTimer || 0) + effectiveDt;
+        const interval = piece.interval || 4.0;
+        if (piece.switchTimer >= interval) {
+          piece.switchTimer = 0;
+          const origDir = piece.baseDir !== undefined ? piece.baseDir : piece.dir;
+          piece.baseDir = origDir;
+          const altDir = piece.altDir !== undefined ? piece.altDir : (origDir + 1) % 4;
+          piece.dir = (piece.dir === origDir) ? altDir : origDir;
+          this.triggerMachineAnim(piece.x, piece.y, 'switch_flip', { dir: piece.dir });
+        }
       }
     }
 
@@ -639,7 +773,7 @@ export class Simulation {
       }
     }
 
-    // 2. Movimiento de formas
+    // 2. Movimiento y lógica de máquinas para cada forma
     for (let i = this.items.length - 1; i >= 0; i--) {
       const item = this.items[i];
       const piece = this.grid.get(item.x, item.y);
@@ -649,10 +783,19 @@ export class Simulation {
         continue;
       }
 
-      // Trituradora: desintegra la forma suavemente con partículas pastel
+      // Velocidad específica de la celda
+      let tileSpeed = beltSpeed;
+      if (piece.type === 'belt_fast') {
+        tileSpeed = beltSpeed * 2.0; // 3.0 celdas/s
+      } else if (piece.type === 'belt_slow') {
+        tileSpeed = beltSpeed * 0.5; // 0.75 celdas/s
+      }
+
+      // Trituradora: desintegra la forma
       if (piece.type === 'trash') {
         item.progress += effectiveDt * 2.2;
         if (item.progress >= 1.0) {
+          this.totalTrashDestroyed++;
           this.triggerMachineAnim(piece.x, piece.y, 'trash_shrink', {
             color: item.shape && item.shape.left ? item.shape.left.color : 'coral'
           });
@@ -661,10 +804,11 @@ export class Simulation {
         continue;
       }
 
-      // Salida / Delivery: latido y recepción
+      // Salida / Delivery: entrega y recepción
       if (piece.type === 'delivery') {
         item.progress += effectiveDt * 3.0;
         if (item.progress >= 0.8) {
+          this.deliveryTimestamps.push(performance.now() / 1000);
           this.triggerMachineAnim(piece.x, piece.y, 'delivery_pulse', {});
           if (this.onDelivery) this.onDelivery(item.shape, piece);
           this.items.splice(i, 1);
@@ -678,7 +822,7 @@ export class Simulation {
         const requiredTime = 0.5;
 
         if (item.processingTimer < requiredTime) {
-          item.progress = Math.min(0.5, item.progress + effectiveDt * beltSpeed);
+          item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
           continue;
         }
 
@@ -689,13 +833,11 @@ export class Simulation {
         continue;
       }
 
-      // Mezcladora: espera a tener dos elementos o combina
+      // Mezcladora
       if (piece.type === 'mixer') {
         item.processingTimer = (item.processingTimer || 0) + effectiveDt;
-
-        // Centrar item en la mezcladora
         if (item.progress < 0.5) {
-          item.progress = Math.min(0.5, item.progress + effectiveDt * beltSpeed);
+          item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
         }
 
         const delta = DIR_DELTA[piece.dir];
@@ -706,7 +848,6 @@ export class Simulation {
         if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
           const outBlocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
           if (!outBlocked) {
-            // Buscar si hay otra forma en la mezcladora
             const otherIdx = this.items.findIndex(it => it !== item && it.x === piece.x && it.y === piece.y);
             if (otherIdx !== -1) {
               const other = this.items[otherIdx];
@@ -718,7 +859,6 @@ export class Simulation {
               this.spawnItem(combined, outX, outY, piece.dir);
               continue;
             } else if (item.processingTimer > 1.8 && item.shape.left && item.shape.right) {
-              // Si ya es una forma completa y lleva tiempo esperando, permitir paso
               this.items.splice(i, 1);
               this.spawnItem(item.shape, outX, outY, piece.dir);
               continue;
@@ -731,14 +871,14 @@ export class Simulation {
       // Túnel subterráneo
       if (piece.type === 'tunnel') {
         if (!item.isUnderground && item.progress < 0.5) {
-          item.progress += effectiveDt * beltSpeed;
+          item.progress += effectiveDt * tileSpeed;
           continue;
         }
 
         const exit = this.findTunnelExit(piece.x, piece.y, piece.dir);
         if (exit) {
           item.isUnderground = true;
-          item.progress += effectiveDt * beltSpeed * 1.8;
+          item.progress += effectiveDt * tileSpeed * 1.8;
 
           if (item.progress >= 1.2) {
             const delta = DIR_DELTA[exit.dir];
@@ -759,17 +899,249 @@ export class Simulation {
           }
           continue;
         } else {
-          item.progress = Math.min(0.5, item.progress + effectiveDt * beltSpeed);
+          item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
           continue;
         }
       }
 
-      // Cinta transportadora estándar
+      // Divisor (Splitter): reparte alternadamente entre recto y lateral
+      if (piece.type === 'splitter') {
+        item.progress += effectiveDt * tileSpeed;
+        if (item.progress >= 1.0) {
+          const straightDir = piece.dir;
+          const sideDir = (piece.dir + 1) % 4; // Desvío a 90°
+          piece.splitPhase = piece.splitPhase || 0;
+          const preferredDir = (piece.splitPhase % 2 === 0) ? straightDir : sideDir;
+          const alternateDir = (piece.splitPhase % 2 === 0) ? sideDir : straightDir;
+
+          let targetDir = preferredDir;
+          let delta = DIR_DELTA[targetDir];
+          let nextX = item.x + delta.x;
+          let nextY = item.y + delta.y;
+          let nextPiece = this.grid.get(nextX, nextY);
+
+          let canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) &&
+            !this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+
+          if (!canGo) {
+            targetDir = alternateDir;
+            delta = DIR_DELTA[targetDir];
+            nextX = item.x + delta.x;
+            nextY = item.y + delta.y;
+            nextPiece = this.grid.get(nextX, nextY);
+            canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) &&
+              !this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+          }
+
+          if (canGo) {
+            piece.splitPhase++;
+            this.totalSplittersProcessed++;
+            item.x = nextX;
+            item.y = nextY;
+            item.inDir = targetDir;
+            item.progress = 0.0;
+            this.triggerMachineAnim(piece.x, piece.y, 'splitter_pulse', { dir: targetDir });
+          } else {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
+      // Fusionador (Merger): recibe de varias entradas y entrega por el frente
+      if (piece.type === 'merger') {
+        item.progress += effectiveDt * tileSpeed;
+        if (item.progress >= 1.0) {
+          const delta = DIR_DELTA[piece.dir];
+          const nextX = item.x + delta.x;
+          const nextY = item.y + delta.y;
+          const nextPiece = this.grid.get(nextX, nextY);
+
+          if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
+            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+            if (!blocked) {
+              item.x = nextX;
+              item.y = nextY;
+              item.inDir = piece.dir;
+              item.progress = 0.0;
+              this.triggerMachineAnim(piece.x, piece.y, 'merger_pulse', { dir: piece.dir });
+            } else {
+              item.progress = 1.0;
+            }
+          } else {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
+      // Filtro / Selector: evalúa condición y bifurca
+      if (piece.type === 'filter') {
+        item.progress += effectiveDt * tileSpeed;
+        if (item.progress >= 1.0) {
+          let matches = false;
+          const fColor = piece.filterColor || piece.color;
+          const fType = piece.filterShapeType;
+          const fShape = piece.filterShape || piece.shape;
+
+          if (fColor) {
+            matches = (item.shape.left && item.shape.left.color === fColor) ||
+                      (item.shape.right && item.shape.right.color === fColor);
+          } else if (fType) {
+            matches = (item.shape.left && item.shape.left.type === fType) ||
+                      (item.shape.right && item.shape.right.type === fType);
+          } else if (fShape) {
+            matches = Shapes.matches(item.shape, fShape);
+          } else {
+            // Predeterminado: compara con la primera demanda del nivel
+            const target = this.game?.currentLevel?.targetShape;
+            matches = target ? Shapes.matches(item.shape, target) : true;
+          }
+
+          const outDir = matches ? piece.dir : (piece.dir + 1) % 4;
+          const delta = DIR_DELTA[outDir];
+          const nextX = item.x + delta.x;
+          const nextY = item.y + delta.y;
+          const nextPiece = this.grid.get(nextX, nextY);
+
+          if (nextPiece && this.canAcceptItem(nextPiece, outDir)) {
+            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+            if (!blocked) {
+              this.totalFiltersProcessed++;
+              item.x = nextX;
+              item.y = nextY;
+              item.inDir = outDir;
+              item.progress = 0.0;
+              this.triggerMachineAnim(piece.x, piece.y, 'filter_pulse', { dir: outDir, matches });
+            } else {
+              item.progress = 1.0;
+            }
+          } else {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
+      // Cruce (Crossing): autopista de paso recto en la dirección de entrada
+      if (piece.type === 'crossing') {
+        const trackDir = item.inDir !== undefined ? item.inDir : piece.dir;
+        item.progress += effectiveDt * tileSpeed;
+        if (item.progress >= 1.0) {
+          const delta = DIR_DELTA[trackDir];
+          const nextX = item.x + delta.x;
+          const nextY = item.y + delta.y;
+          const nextPiece = this.grid.get(nextX, nextY);
+
+          if (nextPiece && this.canAcceptItem(nextPiece, trackDir)) {
+            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+            if (!blocked) {
+              this.totalCrossingsTraversed++;
+              item.x = nextX;
+              item.y = nextY;
+              item.inDir = trackDir;
+              item.progress = 0.0;
+            } else {
+              item.progress = 1.0;
+            }
+          } else {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
+      // Buffer: retención y despacho controlado
+      if (piece.type === 'buffer') {
+        piece.bufferQueue = piece.bufferQueue || [];
+        if (item.progress < 0.5) {
+          item.progress += effectiveDt * tileSpeed * 1.5;
+        } else {
+          if (!piece.bufferQueue.includes(item)) {
+            if (piece.bufferQueue.length < 6) {
+              piece.bufferQueue.push(item);
+              item.isBuffered = true;
+              this.triggerMachineAnim(piece.x, piece.y, 'buffer_store', {});
+            } else {
+              item.progress = 0.5;
+            }
+          }
+        }
+
+        if (piece.bufferQueue.length > 0 && piece.bufferQueue[0] === item) {
+          piece.ejectTimer = (piece.ejectTimer || 0) + effectiveDt;
+          if (piece.ejectTimer >= 0.6) {
+            const delta = DIR_DELTA[piece.dir];
+            const nextX = piece.x + delta.x;
+            const nextY = piece.y + delta.y;
+            const nextPiece = this.grid.get(nextX, nextY);
+
+            if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
+              const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+              if (!blocked) {
+                piece.ejectTimer = 0;
+                piece.bufferQueue.shift();
+                item.isBuffered = false;
+                item.x = nextX;
+                item.y = nextY;
+                item.inDir = piece.dir;
+                item.progress = 0.0;
+                this.triggerMachineAnim(piece.x, piece.y, 'buffer_eject', { dir: piece.dir });
+              }
+            }
+          }
+        }
+        continue;
+      }
+
+      // Portal Dimensional: teletransporte instantáneo entre parejas
+      if (piece.type === 'portal') {
+        item.progress += effectiveDt * tileSpeed * 1.5;
+        if (item.progress >= 0.5 && !item.hasTeleported) {
+          const targetPortalId = piece.targetPortal;
+          const partner = this.grid.getAllPieces().find(p => p.type === 'portal' && p.portalId === targetPortalId);
+          if (partner) {
+            item.hasTeleported = true;
+            this.totalPortalsTraversed++;
+            item.x = partner.x;
+            item.y = partner.y;
+            item.inDir = partner.dir;
+            item.progress = 0.5;
+            this.triggerMachineAnim(piece.x, piece.y, 'portal_teleport', { color: '#C9B6E4' });
+            this.triggerMachineAnim(partner.x, partner.y, 'portal_teleport', { color: '#C9B6E4' });
+          }
+        }
+
+        if (item.progress >= 1.0) {
+          const delta = DIR_DELTA[piece.dir];
+          const nextX = item.x + delta.x;
+          const nextY = item.y + delta.y;
+          const nextPiece = this.grid.get(nextX, nextY);
+
+          if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
+            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+            if (!blocked) {
+              item.x = nextX;
+              item.y = nextY;
+              item.inDir = piece.dir;
+              item.progress = 0.0;
+              item.hasTeleported = false;
+            } else {
+              item.progress = 1.0;
+            }
+          } else {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
+      // Cinta transportadora (estándar, rápida, lenta u oscilante)
       const nextItem = this.findItemAhead(item);
       const maxProgress = nextItem ? Math.max(0, nextItem.progress - 0.45) : 1.0;
 
       if (item.progress < maxProgress) {
-        item.progress = Math.min(maxProgress, item.progress + effectiveDt * beltSpeed);
+        item.progress = Math.min(maxProgress, item.progress + effectiveDt * tileSpeed);
       }
 
       if (item.progress >= 1.0) {
@@ -794,12 +1166,49 @@ export class Simulation {
 
   canAcceptItem(piece, incomingDir) {
     if (!piece) return false;
-    if (piece.type === 'obstacle' || piece.type === 'spawner' || piece.type === 'extractor') return false;
+    if (piece.type === 'obstacle' || piece.type === 'rock') return false;
+    if (piece.type === 'water') return false; // El agua solo se cruza por puente/cruce o túnel
+    if (piece.type === 'spawner' || piece.type === 'extractor') return false;
     if (piece.type === 'trash' || piece.type === 'delivery') return true;
 
-    // Cinta transportadora
-    if (piece.type === 'belt') {
+    // Cintas (estándar, rápida, lenta y oscilante)
+    if (piece.type === 'belt' || piece.type === 'belt_fast' || piece.type === 'belt_slow' || piece.type === 'switching_belt') {
       return piece.dir !== OPPOSITE_DIR[incomingDir];
+    }
+
+    // Divisor (Splitter): entrada trasera
+    if (piece.type === 'splitter') {
+      return incomingDir === piece.dir;
+    }
+
+    // Fusionador (Merger): trasera o laterales
+    if (piece.type === 'merger') {
+      const leftDir = (piece.dir + 1) % 4;
+      const rightDir = (piece.dir + 3) % 4;
+      return incomingDir === piece.dir || incomingDir === leftDir || incomingDir === rightDir;
+    }
+
+    // Filtro: entrada trasera
+    if (piece.type === 'filter') {
+      return incomingDir === piece.dir;
+    }
+
+    // Cruce (Crossing): acepta cualquier dirección si la salida recta correspondiente está libre
+    if (piece.type === 'crossing') {
+      const exitDelta = DIR_DELTA[incomingDir];
+      const exitPiece = this.grid.get(piece.x + exitDelta.x, piece.y + exitDelta.y);
+      return exitPiece ? this.canAcceptItem(exitPiece, incomingDir) : true;
+    }
+
+    // Buffer: entrada trasera y capacidad < 6
+    if (piece.type === 'buffer') {
+      const currentQueue = piece.bufferQueue || [];
+      return incomingDir === piece.dir && currentQueue.length < 6;
+    }
+
+    // Portal: entrada trasera
+    if (piece.type === 'portal') {
+      return incomingDir === piece.dir;
     }
 
     // Cortadora y Pintor (entrada trasera en línea)
@@ -819,7 +1228,6 @@ export class Simulation {
       return incomingDir === piece.dir;
     }
 
-    return false;
   }
 
   processMachineOutput(piece, item) {
@@ -940,11 +1348,73 @@ export class Renderer {
     this.reducedMotion = false;
     this.ghost = null;
     this.particles = [];
+    this.ambientParticles = [];
     this.beltAnimOffset = 0;
     this.placementEffects = new Map(); // key -> { startTime, duration, x, y, type }
 
+    this.initAmbientParticles();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  initAmbientParticles() {
+    this.ambientParticles = [];
+    for (let i = 0; i < 36; i++) {
+      this.ambientParticles.push({
+        x: Math.random() * (window.innerWidth || 1000),
+        y: Math.random() * (window.innerHeight || 800),
+        vx: (Math.random() - 0.5) * 14 + 6,
+        vy: (Math.random() - 0.5) * 10 + 4,
+        size: Math.random() * 2.5 + 1.2,
+        phase: Math.random() * Math.PI * 2,
+        alpha: Math.random() * 0.4 + 0.25
+      });
+    }
+  }
+
+  updateAmbientParticles(dt, biomeIndex) {
+    if (this.reducedMotion) return;
+    const w = this.width || window.innerWidth;
+    const h = this.height || window.innerHeight;
+
+    for (const p of this.ambientParticles) {
+      p.phase += dt * 1.5;
+      if (biomeIndex === 2) {
+        p.y += dt * 20;
+        p.x += Math.sin(p.phase) * dt * 10;
+      } else if (biomeIndex === 3) {
+        p.x += Math.cos(p.phase) * dt * 12;
+        p.y += Math.sin(p.phase) * dt * 12;
+      } else {
+        p.x += dt * 16 + Math.sin(p.phase) * dt * 6;
+        p.y += dt * 8 + Math.cos(p.phase) * dt * 4;
+      }
+
+      if (p.x < 0) p.x = w;
+      if (p.x > w) p.x = 0;
+      if (p.y < 0) p.y = h;
+      if (p.y > h) p.y = 0;
+    }
+  }
+
+  drawAmbientParticles(ctx, biomeIndex) {
+    if (this.reducedMotion) return;
+    ctx.save();
+    for (const p of this.ambientParticles) {
+      let color = 'rgba(245, 208, 97, ';
+      if (biomeIndex === 2) {
+        color = 'rgba(169, 204, 227, ';
+      } else if (biomeIndex === 3) {
+        color = 'rgba(201, 182, 228, ';
+      }
+
+      const pulse = Math.sin(p.phase) * 0.25 + 0.75;
+      ctx.fillStyle = `${color}${p.alpha * pulse})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   addPlacementEffect(gridX, gridY, type = 'belt') {
@@ -1023,8 +1493,22 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.save();
 
-    ctx.fillStyle = this.isDark ? '#1B1F24' : '#F2F0EB';
+    const lvlId = this.game?.currentLevel?.id || 1;
+    const biomeIndex = lvlId > 40 ? 3 : (lvlId > 20 ? 2 : 1);
+    this.updateAmbientParticles(dt, biomeIndex);
+
+    let bgColor = this.isDark ? '#1B1F24' : '#F2F0EB';
+    if (biomeIndex === 1) {
+      bgColor = this.isDark ? '#19221E' : '#EEF3EE';
+    } else if (biomeIndex === 2) {
+      bgColor = this.isDark ? '#182028' : '#ECF2F6';
+    } else if (biomeIndex === 3) {
+      bgColor = this.isDark ? '#201C26' : '#F3EFF7';
+    }
+
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, this.width, this.height);
+    this.drawAmbientParticles(ctx, biomeIndex);
 
     ctx.translate(this.camX, this.camY);
     ctx.scale(this.zoom, this.zoom);
@@ -1371,6 +1855,33 @@ export class Renderer {
       case 'belt':
         this.renderBeltTile(ctx, piece, s);
         break;
+      case 'belt_fast':
+        this.renderFastBeltTile(ctx, piece, s);
+        break;
+      case 'belt_slow':
+        this.renderSlowBeltTile(ctx, piece, s);
+        break;
+      case 'splitter':
+        this.renderSplitterTile(ctx, piece, s);
+        break;
+      case 'merger':
+        this.renderMergerTile(ctx, piece, s);
+        break;
+      case 'filter':
+        this.renderFilterTile(ctx, piece, s);
+        break;
+      case 'crossing':
+        this.renderCrossingTile(ctx, piece, s);
+        break;
+      case 'buffer':
+        this.renderBufferTile(ctx, piece, s);
+        break;
+      case 'portal':
+        this.renderPortalTile(ctx, piece, s);
+        break;
+      case 'switching_belt':
+        this.renderSwitchingBeltTile(ctx, piece, s);
+        break;
       case 'extractor':
       case 'spawner':
         this.renderExtractorTile(ctx, piece, s);
@@ -1394,7 +1905,11 @@ export class Renderer {
         this.renderDeliveryTile(ctx, s);
         break;
       case 'obstacle':
+      case 'rock':
         this.renderObstacleTile(ctx, s);
+        break;
+      case 'water':
+        this.renderWaterTile(ctx, s);
         break;
     }
 
@@ -1402,7 +1917,35 @@ export class Renderer {
   }
 
   renderBeltTile(ctx, piece, s) {
-    this.drawTileBase(ctx, s, '#2B323D', '#222730', '#EFECE6', '#DDD8CE', 6);
+    const skin = this.game?.saveData?.cosmetics?.beltSkin || 'default';
+    let baseDark1 = '#2B323D', baseDark2 = '#222730';
+    let baseLight1 = '#EFECE6', baseLight2 = '#DDD8CE';
+    let trackColor = this.isDark ? '#333C4A' : '#D5CFC4';
+    let arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.22)';
+
+    if (skin === 'skin_bamboo') {
+      baseLight1 = '#E8EFE2'; baseLight2 = '#D7E0CF';
+      baseDark1 = '#232D24'; baseDark2 = '#1B241C';
+      trackColor = this.isDark ? '#314234' : '#C4D3BD';
+      arrowColor = this.isDark ? '#8DA399' : '#5D7769';
+    } else if (skin === 'skin_sakura') {
+      baseLight1 = '#FBF1F3'; baseLight2 = '#F2DFE4';
+      baseDark1 = '#32252A'; baseDark2 = '#251A1F';
+      trackColor = this.isDark ? '#46323A' : '#E8CBD3';
+      arrowColor = this.isDark ? '#E8A0A0' : '#C47D7D';
+    } else if (skin === 'skin_cyber') {
+      baseLight1 = '#E6F6F6'; baseLight2 = '#CFECEC';
+      baseDark1 = '#1A292D'; baseDark2 = '#131F23';
+      trackColor = this.isDark ? '#233F47' : '#BCE3E3';
+      arrowColor = this.isDark ? '#5EEAD4' : '#0D9488';
+    } else if (skin === 'skin_gold') {
+      baseLight1 = '#FBF6EA'; baseLight2 = '#F0E5CC';
+      baseDark1 = '#363023'; baseDark2 = '#292419';
+      trackColor = this.isDark ? '#4D422C' : '#E8D7B0';
+      arrowColor = this.isDark ? '#F59E0B' : '#B45309';
+    }
+
+    this.drawTileBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, 6);
 
     const trackColor = this.isDark ? '#333C4A' : '#D5CFC4';
     const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.22)';
@@ -1661,10 +2204,355 @@ export class Renderer {
   }
 
   renderObstacleTile(ctx, s) {
+    // Roca / Obstáculo Zen suave
     ctx.fillStyle = this.isDark ? '#30343D' : '#D1CBC2';
     ctx.beginPath();
     ctx.arc(0, 0, s * 0.38, 0, Math.PI * 2);
     ctx.fill();
+
+    // Detalle de relieve suave de piedra
+    ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(-2, -2, s * 0.28, Math.PI * 0.8, Math.PI * 1.8);
+    ctx.stroke();
+  }
+
+  renderFastBeltTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#1D2F38', '#142229', '#E0F2FE', '#BAE6FD', 6);
+    const trackColor = this.isDark ? '#1E3A4B' : '#BAE6FD';
+    const arrowColor = this.isDark ? '#38BDF8' : '#0284C7';
+
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const count = 4;
+    const fastOffset = (this.beltAnimOffset * 2.2) % 1.0;
+    for (let i = 0; i < count; i++) {
+      const offset = ((i / count) + fastOffset) % 1.0;
+      const x = -s / 2 + offset * s;
+      ctx.beginPath();
+      ctx.moveTo(x - 6, -s * 0.20);
+      ctx.lineTo(x + 2, 0);
+      ctx.lineTo(x - 6, s * 0.20);
+      ctx.stroke();
+    }
+  }
+
+  renderSlowBeltTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#382E26', '#2A221B', '#FDF4EC', '#F4DEC9', 6);
+    const trackColor = this.isDark ? '#4A3B2E' : '#E8CCA8';
+    const arrowColor = this.isDark ? '#F59E0B' : '#B45309';
+
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const count = 2;
+    const slowOffset = (this.beltAnimOffset * 0.5) % 1.0;
+    for (let i = 0; i < count; i++) {
+      const offset = ((i / count) + slowOffset) % 1.0;
+      const x = -s / 2 + offset * s;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, -s * 0.16);
+      ctx.lineTo(x + 2, 0);
+      ctx.lineTo(x - 4, s * 0.16);
+      ctx.stroke();
+    }
+  }
+
+  renderSplitterTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#243530', '#1A2723', '#E3F4ED', '#C9E8DC', 8);
+
+    const trackColor = this.isDark ? '#2E473F' : '#BFE3D4';
+    const arrowColor = this.isDark ? '#A8D5BA' : '#2D8A5B';
+
+    // Canal central y ramales
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.20, s * 0.45, s * 0.40);
+    ctx.fillRect(0, -s * 0.20, s / 2 - 4, s * 0.40);
+    ctx.fillRect(-s * 0.20, 0, s * 0.40, s / 2 - 4);
+
+    // Separador central
+    ctx.fillStyle = arrowColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Flechas indicadoras de salida
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
+
+    // Flecha recta
+    ctx.beginPath();
+    ctx.moveTo(s * 0.22, -s * 0.12);
+    ctx.lineTo(s * 0.36, 0);
+    ctx.lineTo(s * 0.22, s * 0.12);
+    ctx.stroke();
+
+    // Flecha lateral
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.12, s * 0.22);
+    ctx.lineTo(0, s * 0.36);
+    ctx.lineTo(s * 0.12, s * 0.22);
+    ctx.stroke();
+  }
+
+  renderMergerTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#363124', '#272319', '#FAF3E3', '#EDE0BD', 8);
+
+    const trackColor = this.isDark ? '#473F2D' : '#E8D8A7';
+    const arrowColor = this.isDark ? '#F5C6A5' : '#C27A3A';
+
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.22, s - 8, s * 0.44);
+    ctx.fillRect(-s * 0.22, -s / 2 + 4, s * 0.44, s - 8);
+
+    ctx.fillStyle = arrowColor;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.25, -s * 0.22);
+    ctx.lineTo(s * 0.15, 0);
+    ctx.lineTo(-s * 0.25, s * 0.22);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.20, -s * 0.14);
+    ctx.lineTo(s * 0.36, 0);
+    ctx.lineTo(s * 0.20, s * 0.14);
+    ctx.stroke();
+  }
+
+  renderFilterTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#322A3E', '#241D2E', '#F1E8FA', '#DFCEEE', 8);
+
+    const trackColor = this.isDark ? '#433756' : '#D9C8EB';
+    const mainColor = this.isDark ? '#C9B6E4' : '#7C4FB6';
+    const divertColor = '#F5C6A5';
+
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.20, s - 8, s * 0.40);
+    ctx.fillRect(-s * 0.20, 0, s * 0.40, s / 2 - 4);
+
+    // Lente / Glifo central
+    ctx.fillStyle = this.isDark ? '#231B30' : '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    if (piece.filterColor) {
+      ctx.fillStyle = COLOR_HEX[piece.filterColor] || mainColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (piece.filterShapeType) {
+      Shapes.drawGeometry(ctx, piece.filterShapeType, 'lavender', s * 0.16, this.isDark);
+    } else {
+      ctx.strokeStyle = mainColor;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-4, -4);
+      ctx.lineTo(4, -4);
+      ctx.lineTo(0, 3);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#A8D5BA';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.28, -4);
+    ctx.lineTo(s * 0.38, 0);
+    ctx.lineTo(s * 0.28, 4);
+    ctx.stroke();
+
+    ctx.strokeStyle = divertColor;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(-4, s * 0.28);
+    ctx.lineTo(0, s * 0.38);
+    ctx.lineTo(4, s * 0.28);
+    ctx.stroke();
+  }
+
+  renderCrossingTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#2B323D', '#222730', '#EFECE6', '#DDD8CE', 6);
+
+    const trackColor = this.isDark ? '#333C4A' : '#D5CFC4';
+    const arrowColor = this.isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.22)';
+
+    // Pista inferior vertical
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s * 0.26, -s / 2 + 4, s * 0.52, s - 8);
+
+    // Sombra del puente
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+
+    // Pista superior horizontal
+    ctx.fillStyle = this.isDark ? '#3A4454' : '#E2DCD2';
+    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+    ctx.restore();
+
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(-3, -s * 0.16);
+    ctx.lineTo(4, 0);
+    ctx.lineTo(-3, s * 0.16);
+    ctx.stroke();
+
+    ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-s / 2 + 4, -s * 0.28);
+    ctx.lineTo(s / 2 - 4, -s * 0.28);
+    ctx.moveTo(-s / 2 + 4, s * 0.28);
+    ctx.lineTo(s / 2 - 4, s * 0.28);
+    ctx.stroke();
+  }
+
+  renderBufferTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#28343F', '#1C252E', '#E4EEF7', '#CCDDEB', 8);
+
+    const boxColor = this.isDark ? '#1F2A34' : '#FFFFFF';
+    const borderColor = this.isDark ? '#5B7894' : '#97B6D2';
+
+    ctx.fillStyle = boxColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1.8;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(-s * 0.32, -s * 0.32, s * 0.64, s * 0.64, 5);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(-s * 0.32, -s * 0.32, s * 0.64, s * 0.64);
+      ctx.strokeRect(-s * 0.32, -s * 0.32, s * 0.64, s * 0.64);
+    }
+
+    const storedCount = (piece.bufferQueue || []).length;
+    const dotCols = 3;
+    const dotRows = 2;
+    for (let r = 0; r < dotRows; r++) {
+      for (let c = 0; c < dotCols; c++) {
+        const dotIdx = r * dotCols + c;
+        const dx = -s * 0.18 + c * (s * 0.18);
+        const dy = -s * 0.12 + r * (s * 0.24);
+
+        ctx.fillStyle = dotIdx < storedCount ? (this.isDark ? '#A9CCE3' : '#3B82F6') : (this.isDark ? '#334155' : '#CBD5E1');
+        ctx.beginPath();
+        ctx.arc(dx, dy, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.34, -4);
+    ctx.lineTo(s * 0.44, 0);
+    ctx.lineTo(s * 0.34, 4);
+    ctx.stroke();
+  }
+
+  renderPortalTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#2B2338', '#1E1728', '#EFE6FB', '#DECCF4', 12);
+
+    const time = performance.now() * 0.003;
+    const portalColor = '#C9B6E4';
+
+    const pulse = Math.sin(time * 2) * 2;
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, s * 0.40 + pulse);
+    grad.addColorStop(0, 'rgba(201, 182, 228, 0.7)');
+    grad.addColorStop(0.6, 'rgba(201, 182, 228, 0.2)');
+    grad.addColorStop(1, 'rgba(201, 182, 228, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.42 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.rotate(time);
+    ctx.strokeStyle = portalColor;
+    ctx.lineWidth = 2.0;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    if (piece.portalId) {
+      ctx.fillStyle = this.isDark ? '#FFFFFF' : '#3D2A54';
+      ctx.font = 'bold 10px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(piece.portalId, 0, 0);
+    }
+  }
+
+  renderSwitchingBeltTile(ctx, piece, s) {
+    this.renderBeltTile(ctx, piece, s);
+
+    const phase = ((piece.switchTimer || 0) / (piece.interval || 4.0)) % 1.0;
+    ctx.fillStyle = this.isDark ? '#E5E9F0' : '#4C566A';
+    ctx.beginPath();
+    ctx.arc(s * 0.32, -s * 0.32, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#F5C6A5';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(s * 0.32, -s * 0.32, 5, 0, Math.PI * 2 * (1 - phase));
+    ctx.stroke();
+  }
+
+  renderWaterTile(ctx, s) {
+    const isDark = this.isDark;
+    const baseColor = isDark ? '#1A2936' : '#D4EAF7';
+    const waveColor = isDark ? 'rgba(169, 204, 227, 0.25)' : 'rgba(255, 255, 255, 0.55)';
+
+    ctx.fillStyle = baseColor;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-s / 2 + 2, -s / 2 + 2, s - 4, s - 4);
+    }
+
+    const time = performance.now() * 0.002;
+    ctx.strokeStyle = waveColor;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    const waveY1 = Math.sin(time) * 2 - 4;
+    ctx.arc(-4, waveY1, 6, Math.PI * 0.2, Math.PI * 0.8, false);
+    ctx.stroke();
+
+    ctx.beginPath();
+    const waveY2 = Math.cos(time) * 2 + 6;
+    ctx.arc(4, waveY2, 6, Math.PI * 0.2, Math.PI * 0.8, false);
+    ctx.stroke();
   }
 
   drawGhost(ctx, ghost) {
@@ -2206,6 +3094,28 @@ export class InputManager {
       return;
     }
 
+    // Atajos de Deshacer / Rehacer (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.game.redo();
+      } else {
+        this.game.undo();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault();
+      this.game.redo();
+      return;
+    }
+
+    // Alternar modo Zen con tecla Z (sin modificadores)
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      this.game.toggleZenMode();
+      return;
+    }
+
     // Tecla Q para alternar entre Modo Vista y Modo Edición
     if (e.key === 'q' || e.key === 'Q') {
       this.game.toggleMode();
@@ -2223,16 +3133,62 @@ export class InputManager {
       return;
     }
 
-    // Teclas 1 a 8 para herramientas (solo en modo edición o cambia herramienta y pasa a edición)
+    // Herramientas avanzadas:
+    // Shift+1 o ! -> Cinta Rápida
+    if (e.shiftKey && (e.key === '1' || e.key === '!')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('belt_fast');
+      return;
+    }
+    // Alt+1 -> Cinta Lenta
+    if (e.altKey && e.key === '1') {
+      e.preventDefault();
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('belt_slow');
+      return;
+    }
+
+    // Teclas 1 a 8 para herramientas estándar
     const tools = ['belt', 'extractor', 'trash', 'cutter', 'painter', 'mixer', 'tunnel', 'erase'];
-    if (e.key >= '1' && e.key <= '8') {
+    if (e.key >= '1' && e.key <= '8' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
       const idx = parseInt(e.key, 10) - 1;
       if (tools[idx]) {
         if (this.game.mode === 'view') {
-          this.game.toggleMode(); // Pasar a modo edición al seleccionar herramienta
+          this.game.toggleMode();
         }
         this.game.selectTool(tools[idx]);
       }
+      return;
+    }
+
+    // Tecla 9 -> Divisor / Splitter
+    if (e.key === '9' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('splitter');
+      return;
+    }
+    // Tecla 0 -> Fusionador / Merger
+    if (e.key === '0' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('merger');
+      return;
+    }
+    // Tecla F -> Filtro / Selector
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('filter');
+      return;
+    }
+    // Tecla C -> Cruce / Puente a nivel
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'c' || e.key === 'C')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('crossing');
+      return;
+    }
+    // Tecla B -> Almacén Buffer
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'b' || e.key === 'B')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('buffer');
       return;
     }
 
@@ -2341,6 +3297,7 @@ export class UIManager {
     // Pestañas de capítulos en selector de niveles
     const tab1 = document.getElementById('tab-chapter-1');
     const tab2 = document.getElementById('tab-chapter-2');
+    const tab3 = document.getElementById('tab-chapter-3');
     if (tab1) {
       tab1.addEventListener('click', () => {
         this.activeChapter = 1;
@@ -2359,6 +3316,36 @@ export class UIManager {
         this.populateLevelsGrid();
       });
     }
+    if (tab3) {
+      tab3.addEventListener('click', () => {
+        const save = this.game.saveData;
+        const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
+        const isChapter3Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(40)) || maxUnlocked > 40 || save.nivelActual > 40;
+        if (!isChapter3Unlocked) {
+          this.showToast("🔒 Completa el nivel 40 para desbloquear el Capítulo 3: Vanguardia", 2200);
+        }
+        this.activeChapter = 3;
+        this.populateLevelsGrid();
+      });
+    }
+
+    // Botones de Modo Zen y Deshacer / Rehacer
+    document.getElementById('btn-zen-toggle')?.addEventListener('click', () => this.game.toggleZenMode());
+    document.getElementById('btn-undo')?.addEventListener('click', () => this.game.undo());
+    document.getElementById('btn-redo')?.addEventListener('click', () => this.game.redo());
+
+    // Botones del menú principal
+    document.getElementById('menu-btn-continue')?.addEventListener('click', () => this.game.startGameFromMenu());
+    document.getElementById('menu-btn-achievements')?.addEventListener('click', () => this.toggleAchievementsModal(true));
+    document.getElementById('menu-btn-shop')?.addEventListener('click', () => this.toggleShopModal(true));
+    document.getElementById('menu-btn-editor')?.addEventListener('click', () => this.toggleEditorModal(true));
+
+    document.getElementById('btn-close-achievements')?.addEventListener('click', () => this.toggleAchievementsModal(false));
+    document.getElementById('btn-close-shop')?.addEventListener('click', () => this.toggleShopModal(false));
+    document.getElementById('btn-close-editor')?.addEventListener('click', () => this.toggleEditorModal(false));
+
+    document.getElementById('btn-editor-export')?.addEventListener('click', () => this.exportLevelToEditor());
+    document.getElementById('btn-editor-import')?.addEventListener('click', () => this.importLevelFromEditor());
 
     document.getElementById('btn-levels-modal')?.addEventListener('click', () => this.toggleLevelsModal(true));
     document.getElementById('btn-sound-toggle')?.addEventListener('click', () => this.game.toggleSound());
@@ -2466,7 +3453,7 @@ export class UIManager {
     const hackerUnlockAll = document.getElementById('hacker-btn-unlock-all');
     if (hackerUnlockAll) {
       hackerUnlockAll.addEventListener('click', () => {
-        for (let i = 1; i <= 40; i++) {
+        for (let i = 1; i <= 60; i++) {
           if (!this.game.saveData.nivelesCompletados.includes(i)) {
             this.game.saveData.nivelesCompletados.push(i);
           }
@@ -2475,7 +3462,7 @@ export class UIManager {
         this.game.autoSave();
         this.populateLevelsGrid();
         this.updateMenuStats();
-        this.showToast("⭐ ¡Todos los 40 niveles desbloqueados con 3 estrellas!", 2500);
+        this.showToast("⭐ ¡Todos los 60 niveles desbloqueados con 3 estrellas!", 2500);
         this.toggleHackerModal(false);
       });
     }
@@ -2567,6 +3554,30 @@ export class UIManager {
     const totalQuota = demands ? demands.reduce((acc, d) => acc + d.quota, 0) : level.quota;
     this.updateQuota(0, totalQuota, demands);
     this.updateAvailableTools(level.availableTools || ['belt', 'extractor']);
+
+    // Indicador de presupuesto de piezas
+    const budgetPanel = document.getElementById('hud-budget-panel');
+    const budgetDisplay = document.getElementById('hud-budget-display');
+    if (level.maxPieces) {
+      if (budgetPanel) budgetPanel.style.display = 'flex';
+      const used = this.game.grid.getAllPieces().filter(p => !p.fixed).length;
+      if (budgetDisplay) {
+        budgetDisplay.textContent = `${used} / ${level.maxPieces}`;
+        budgetDisplay.style.color = used > level.maxPieces ? '#E8A0A0' : '';
+      }
+    } else {
+      if (budgetPanel) budgetPanel.style.display = 'none';
+    }
+
+    // Indicador de ritmo / tasa de entrega sostenida
+    const ratePanel = document.getElementById('hud-rate-panel');
+    const rateDisplay = document.getElementById('hud-rate-display');
+    if (level.targetRate) {
+      if (ratePanel) ratePanel.style.display = 'flex';
+      if (rateDisplay) rateDisplay.textContent = `0.0 / ${level.targetRate}/s`;
+    } else {
+      if (ratePanel) ratePanel.style.display = 'none';
+    }
   }
 
   updateQuota(delivered, quota, demands = null) {
@@ -2792,7 +3803,7 @@ export class UIManager {
     if (!grid) return;
     grid.innerHTML = '';
 
-    for (let i = 1; i <= 40; i++) {
+    for (let i = 1; i <= 60; i++) {
       const btn = document.createElement('button');
       btn.className = `hacker-level-btn mono ${this.game.saveData.nivelActual === i ? 'current' : ''}`;
       btn.textContent = i;
@@ -2817,23 +3828,38 @@ export class UIManager {
     const save = this.game.saveData;
     const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
     const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
+    const isChapter3Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(40)) || maxUnlocked > 40 || save.nivelActual > 40;
 
     const tab1 = document.getElementById('tab-chapter-1');
     const tab2 = document.getElementById('tab-chapter-2');
+    const tab3 = document.getElementById('tab-chapter-3');
     if (tab1) tab1.className = `level-tab-btn ${this.activeChapter === 1 ? 'active' : ''}`;
     if (tab2) {
       tab2.className = `level-tab-btn ${this.activeChapter === 2 ? 'active' : ''} ${!isChapter2Unlocked ? 'locked-tab' : ''}`;
       tab2.title = isChapter2Unlocked ? "Capítulo 2: Maestría (21–40)" : "Completa el nivel 20 para desbloquear el Capítulo 2";
     }
+    if (tab3) {
+      tab3.className = `level-tab-btn ${this.activeChapter === 3 ? 'active' : ''} ${!isChapter3Unlocked ? 'locked-tab' : ''}`;
+      tab3.title = isChapter3Unlocked ? "Capítulo 3: Vanguardia (41–60)" : "Completa el nivel 40 para desbloquear el Capítulo 3";
+    }
 
-    const startLevel = this.activeChapter === 1 ? 1 : 21;
-    const endLevel = this.activeChapter === 1 ? 20 : 40;
+    let startLevel = 1;
+    let endLevel = 20;
+    if (this.activeChapter === 2) {
+      startLevel = 21;
+      endLevel = 40;
+    } else if (this.activeChapter === 3) {
+      startLevel = 41;
+      endLevel = 60;
+    }
+
     const filteredLevels = LEVELS.filter(l => l.id >= startLevel && l.id <= endLevel);
 
     filteredLevels.forEach(lvl => {
       const isCompleted = save.nivelesCompletados.includes(lvl.id);
       const isCurrent = save.nivelActual === lvl.id;
-      const isUnlocked = (lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) && (lvl.id <= 20 || isChapter2Unlocked);
+      const chapterUnlocked = lvl.id <= 20 || (lvl.id <= 40 ? isChapter2Unlocked : isChapter3Unlocked);
+      const isUnlocked = (lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) && chapterUnlocked;
 
       const btn = document.createElement('button');
       btn.className = `level-card-btn ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${!isUnlocked ? 'locked' : ''}`;
@@ -2863,7 +3889,9 @@ export class UIManager {
         });
       } else {
         btn.addEventListener('click', () => {
-          if (lvl.id > 20 && !isChapter2Unlocked) {
+          if (lvl.id > 40 && !isChapter3Unlocked) {
+            this.showToast("🔒 Completa el nivel 40 para desbloquear el Capítulo 3: Vanguardia", 2000);
+          } else if (lvl.id > 20 && !isChapter2Unlocked) {
             this.showToast("🔒 Completa el nivel 20 para desbloquear el Capítulo 2", 2000);
           } else {
             this.showToast(`Completa el nivel ${lvl.id - 1} para desbloquear este nivel`, 1800);
@@ -2887,13 +3915,202 @@ export class UIManager {
       Object.values(save.estrellas).forEach(s => totalStars += (s || 0));
     }
 
-    summaryEl.textContent = `Nivel ${save.nivelActual || 1} · ${completedCount}/40 Completados · ${totalStars} ★`;
+    const coins = save.coins !== undefined ? save.coins : (save.monedas || 0);
+    summaryEl.textContent = `Nivel ${save.nivelActual || 1} · ${completedCount}/60 Completados · ${totalStars} ★ · ${coins} 🪙`;
 
     if (playBtn) {
       const titleEl = playBtn.querySelector('.menu-btn-title');
       const descEl = playBtn.querySelector('.menu-btn-desc');
       if (titleEl) titleEl.textContent = completedCount > 0 ? "Continuar Partida" : "Jugar";
       if (descEl) descEl.textContent = completedCount > 0 ? `Retomar Nivel ${save.nivelActual || 1}` : "Comenzar el viaje de automatización";
+    }
+  }
+
+  toggleAchievementsModal(show) {
+    const modal = document.getElementById('achievements-modal');
+    if (!modal) return;
+    if (show) {
+      this.populateAchievementsModal();
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  populateAchievementsModal() {
+    const container = document.getElementById('achievements-grid-container');
+    const countEl = document.getElementById('achievements-count');
+    const coinsEl = document.getElementById('achievements-coins');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const unlocked = this.game.saveData.achievements || [];
+    if (countEl) countEl.textContent = `${unlocked.length} / ${ACHIEVEMENTS.length}`;
+    if (coinsEl) coinsEl.textContent = `${this.game.saveData.coins || 0} 🪙`;
+
+    ACHIEVEMENTS.forEach(ach => {
+      const isDone = unlocked.includes(ach.id);
+      const card = document.createElement('div');
+      card.className = `achievement-item ${isDone ? 'unlocked' : 'locked'}`;
+      card.innerHTML = `
+        <div class="achievement-icon">${ach.icon}</div>
+        <div class="achievement-info">
+          <div class="achievement-title">${ach.name} ${isDone ? '✅' : '🔒'}</div>
+          <div class="achievement-desc">${ach.desc}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  toggleShopModal(show) {
+    const modal = document.getElementById('shop-modal');
+    if (!modal) return;
+    if (show) {
+      this.populateShopModal();
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  populateShopModal() {
+    const container = document.getElementById('shop-grid-container');
+    const coinsEl = document.getElementById('shop-coins-val');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const coins = this.game.saveData.coins || 0;
+    if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
+
+    const unlocked = this.game.saveData.unlockedCosmetics || ['default'];
+    const currentSkin = this.game.saveData.cosmetics?.beltSkin || 'default';
+
+    COSMETIC_SKINS.forEach(skin => {
+      const isEquipped = currentSkin === skin.id;
+      const isUnlocked = unlocked.includes(skin.id);
+
+      const card = document.createElement('div');
+      card.className = `shop-item-card ${isEquipped ? 'equipped' : ''}`;
+      
+      let btnHtml = '';
+      if (isEquipped) {
+        btnHtml = `<button class="shop-btn equipped-btn" disabled>Equipado ✓</button>`;
+      } else if (isUnlocked) {
+        btnHtml = `<button class="shop-btn equip-action-btn" data-skin="${skin.id}">Equipar</button>`;
+      } else {
+        const canAfford = coins >= skin.cost;
+        btnHtml = `<button class="shop-btn buy-action-btn ${canAfford ? '' : 'disabled'}" data-skin="${skin.id}">${canAfford ? 'Comprar 🪙 ' + skin.cost : 'Faltan 🪙 ' + (skin.cost - coins)}</button>`;
+      }
+
+      card.innerHTML = `
+        <div class="shop-item-header">
+          <span class="shop-item-name">${skin.name}</span>
+          <span class="shop-item-cost mono">${skin.cost > 0 ? '🪙 ' + skin.cost : 'Gratis'}</span>
+        </div>
+        <p class="shop-item-desc">${skin.desc}</p>
+        ${btnHtml}
+      `;
+
+      card.querySelector('.equip-action-btn')?.addEventListener('click', () => {
+        this.game.equipSkin(skin.id);
+        this.populateShopModal();
+      });
+
+      card.querySelector('.buy-action-btn')?.addEventListener('click', () => {
+        if (coins >= skin.cost) {
+          this.game.buySkin(skin.id);
+          this.populateShopModal();
+        } else {
+          this.showToast(`Necesitas ${skin.cost} monedas para este aspecto`, 2000);
+        }
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  toggleEditorModal(show) {
+    const modal = document.getElementById('editor-modal');
+    if (!modal) return;
+    if (show) {
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  exportLevelToEditor() {
+    const box = document.getElementById('editor-code-box');
+    if (!box) return;
+    const exportObj = {
+      version: '3.0',
+      id: this.game.currentLevel?.id || 1,
+      name: this.game.currentLevel?.name || 'Fábrica Personalizada',
+      pieces: this.game.grid.exportUserPieces(),
+      demands: this.game.currentDemands
+    };
+    try {
+      const json = JSON.stringify(exportObj);
+      const b64 = btoa(unescape(encodeURIComponent(json)));
+      box.value = b64;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(b64).catch(() => {});
+      }
+      this.showToast("📤 Fábrica exportada a Base64 y copiada al portapapeles", 2500);
+    } catch (e) {
+      this.showToast("⚠️ Error al exportar la fábrica", 2000);
+    }
+  }
+
+  importLevelFromEditor() {
+    const box = document.getElementById('editor-code-box');
+    if (!box) return;
+    const code = box.value.trim();
+    if (!code) {
+      this.showToast("⚠️ Pega un código Base64 en el área de texto", 2000);
+      return;
+    }
+    try {
+      const json = decodeURIComponent(escape(atob(code)));
+      const data = JSON.parse(json);
+      if (data && data.pieces) {
+        this.game.grid.clearNonFixed();
+        this.game.grid.importUserPieces(data.pieces);
+        this.game.sim.reset();
+        this.game.updateGhost();
+        this.game.updateBudgetHUD();
+        this.toggleEditorModal(false);
+        this.showToast(`📥 Fábrica "${data.name || 'Personalizada'}" cargada con éxito`, 2500);
+      } else {
+        this.showToast("⚠️ Formato de código no válido", 2200);
+      }
+    } catch (e) {
+      this.showToast("⚠️ Código Base64 inválido o corrupto", 2200);
+    }
+  }
+
+  updateZenToggleUI(gameMode) {
+    const btn = document.getElementById('btn-zen-toggle');
+    const icon = document.getElementById('zen-toggle-icon');
+    const label = document.getElementById('zen-toggle-label');
+    if (!btn) return;
+    const isRelaxed = gameMode === 'relaxed';
+    btn.className = `mode-toggle-btn ${isRelaxed ? 'zen' : 'challenge'}`;
+    if (icon) icon.textContent = isRelaxed ? '🍃' : '⚡';
+    if (label) label.textContent = isRelaxed ? 'Zen' : 'Desafío';
+  }
+
+  updateUndoRedoUI(canUndo, canRedo) {
+    const uBtn = document.getElementById('btn-undo');
+    const rBtn = document.getElementById('btn-redo');
+    if (uBtn) {
+      uBtn.style.opacity = canUndo ? '1' : '0.45';
+      uBtn.style.pointerEvents = canUndo ? 'auto' : 'none';
+    }
+    if (rBtn) {
+      rBtn.style.opacity = canRedo ? '1' : '0.45';
+      rBtn.style.pointerEvents = canRedo ? 'auto' : 'none';
     }
   }
 
@@ -2968,6 +4185,12 @@ export class BeltFlowGame {
     this.painterColor = PASTEL_COLORS.MINT;
     this.mode = 'edit'; // 'edit' (Edición) o 'view' (Vista)
 
+    // Pilas de Deshacer / Rehacer y Modo Zen
+    this.undoStack = [];
+    this.redoStack = [];
+    this.gameMode = this.saveData.gameMode || 'relaxed';
+    this.ambientTimer = 0;
+
     // Circuito procedural relajante de fondo para el Menú
     this.initDemoScene();
 
@@ -2980,6 +4203,8 @@ export class BeltFlowGame {
 
     this.applyLoadedConfig();
     this.ui.updateModeUI(this.mode);
+    this.ui.updateZenToggleUI(this.gameMode);
+    this.ui.updateUndoRedoUI(false, false);
     this.updateCanvasCursor();
     this.loadLevel(this.saveData.nivelActual || 1);
     this.ui.updateMenuStats();
@@ -3176,9 +4401,15 @@ export class BeltFlowGame {
       this.grid.importUserPieces(savedBuildings);
     }
 
+    this.undoStack = [];
+    this.redoStack = [];
+    this.ui.updateUndoRedoUI(false, false);
+
     this.saveData.nivelActual = lvl.id;
     this.ui.updateLevelInfo(lvl, this.currentDemands);
-    this.ui.setLivesVisible(!!lvl.hasLives, this.lives);
+    const showLives = this.gameMode === 'challenge' && !!lvl.hasLives;
+    this.ui.setLivesVisible(showLives, this.lives);
+    this.updateBudgetHUD();
 
     if (!lvl.availableTools.includes(this.selectedTool) && this.selectedTool !== 'erase') {
       this.selectTool(lvl.availableTools[0] || 'belt');
@@ -3193,6 +4424,95 @@ export class BeltFlowGame {
     this.updateGhost();
   }
 
+  recordAction(action) {
+    this.undoStack.push(action);
+    if (this.undoStack.length > 60) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+    this.ui.updateUndoRedoUI(this.undoStack.length > 0, this.redoStack.length > 0);
+  }
+
+  undo() {
+    if (this.undoStack.length === 0) {
+      this.ui.showToast("No hay acciones para deshacer", 1000);
+      return;
+    }
+    const action = this.undoStack.pop();
+    if (action.type === 'place') {
+      if (action.prevPiece) {
+        this.grid.set(action.x, action.y, { ...action.prevPiece });
+      } else {
+        this.grid.remove(action.x, action.y);
+      }
+    } else if (action.type === 'remove') {
+      if (action.prevPiece) {
+        this.grid.set(action.x, action.y, { ...action.prevPiece });
+      }
+    } else if (action.type === 'rotate') {
+      const piece = this.grid.get(action.x, action.y);
+      if (piece) piece.dir = action.prevDir;
+    } else if (action.type === 'clear') {
+      if (action.pieces) {
+        action.pieces.forEach(p => this.grid.set(p.x, p.y, { ...p }));
+      }
+    }
+    this.redoStack.push(action);
+    this.ui.updateUndoRedoUI(this.undoStack.length > 0, this.redoStack.length > 0);
+    this.updateBudgetHUD();
+    this.updateGhost();
+    this.audio.playRotate();
+    this.ui.showToast("↩️ Deshecho", 800);
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) {
+      this.ui.showToast("No hay acciones para rehacer", 1000);
+      return;
+    }
+    const action = this.redoStack.pop();
+    if (action.type === 'place') {
+      this.grid.set(action.x, action.y, { ...action.newPiece });
+    } else if (action.type === 'remove') {
+      this.grid.remove(action.x, action.y);
+    } else if (action.type === 'rotate') {
+      const piece = this.grid.get(action.x, action.y);
+      if (piece) piece.dir = action.newDir;
+    } else if (action.type === 'clear') {
+      this.grid.clearNonFixed();
+    }
+    this.undoStack.push(action);
+    this.ui.updateUndoRedoUI(this.undoStack.length > 0, this.redoStack.length > 0);
+    this.updateBudgetHUD();
+    this.updateGhost();
+    this.audio.playRotate();
+    this.ui.showToast("↪️ Rehecho", 800);
+  }
+
+  updateBudgetHUD() {
+    if (!this.currentLevel || !this.currentLevel.maxPieces) return;
+    const used = this.grid.getAllPieces().filter(p => !p.fixed).length;
+    const el = document.getElementById('hud-budget-display');
+    if (el) {
+      el.textContent = `${used} / ${this.currentLevel.maxPieces}`;
+      el.style.color = used > this.currentLevel.maxPieces ? '#E8A0A0' : '';
+    }
+  }
+
+  toggleZenMode() {
+    this.gameMode = this.gameMode === 'relaxed' ? 'challenge' : 'relaxed';
+    this.saveData.gameMode = this.gameMode;
+    this.ui.updateZenToggleUI(this.gameMode);
+    const hasLives = this.gameMode === 'challenge' && !!this.currentLevel?.hasLives;
+    this.ui.setLivesVisible(hasLives, this.lives);
+    this.autoSave();
+    if (this.gameMode === 'relaxed') {
+      this.ui.showToast("🍃 Modo Zen: Disfruta sin límite de tiempo ni pérdida de vidas", 2200);
+    } else {
+      this.ui.showToast("⚡ Modo Desafío: Cronómetro y vidas activados", 2200);
+    }
+  }
+
   restartLevelMap() {
     const userPieces = this.grid.getAllPieces().filter(p => !p.fixed);
     if (userPieces.length > 5) {
@@ -3200,6 +4520,11 @@ export class BeltFlowGame {
         return;
       }
     }
+
+    this.recordAction({
+      type: 'clear',
+      pieces: userPieces.map(p => ({ ...p }))
+    });
 
     this.grid.clearNonFixed();
     this.sim.reset();
@@ -3215,6 +4540,7 @@ export class BeltFlowGame {
 
     this.ui.updateQuota(0, this.totalQuota, this.currentDemands);
     this.ui.updateLives(this.lives, false);
+    this.updateBudgetHUD();
     this.ui.showToast("Construcción del nivel reiniciada", 1500);
     this.autoSave();
     this.updateGhost();
@@ -3245,8 +4571,16 @@ export class BeltFlowGame {
     if (this.renderer.ghost) {
       const existing = this.grid.get(this.renderer.ghost.x, this.renderer.ghost.y);
       if (existing && !existing.fixed) {
+        const oldDir = existing.dir;
         existing.dir = (existing.dir + 1) % 4;
         this.placementDir = existing.dir;
+        this.recordAction({
+          type: 'rotate',
+          x: existing.x,
+          y: existing.y,
+          prevDir: oldDir,
+          newDir: existing.dir
+        });
         this.audio.playRotate();
         this.updateGhost();
         return;
@@ -3466,6 +4800,16 @@ export class BeltFlowGame {
       return;
     }
 
+    // Comprobación de límite de presupuesto de piezas
+    if (!existing && this.currentLevel && this.currentLevel.maxPieces) {
+      const currentCount = this.grid.getAllPieces().filter(p => !p.fixed).length;
+      if (currentCount >= this.currentLevel.maxPieces) {
+        this.audio.playError();
+        this.ui.showToast(`⚠️ Límite de ${this.currentLevel.maxPieces} piezas alcanzado en este nivel`, 2000);
+        return;
+      }
+    }
+
     // Regla de Minas y Extractores: el extractor solo puede colocarse sobre una mina de recursos
     if (this.selectedTool === 'extractor') {
       if (!this.grid.hasMine(x, y)) {
@@ -3485,21 +4829,42 @@ export class BeltFlowGame {
         fixed: false
       };
 
+      this.recordAction({
+        type: 'place',
+        x, y,
+        prevPiece: existing ? { ...existing } : null,
+        newPiece: { ...newPiece }
+      });
+
       this.grid.set(x, y, newPiece);
       this.renderer.addPlacementEffect(x, y, 'extractor');
       this.audio.playPlaf();
+      this.updateBudgetHUD();
       this.updateGhost(x, y);
+      this.checkAchievements();
       return;
     }
 
-    // Cinta sobre cinta
-    if (existing && existing.type === 'belt' && this.selectedTool === 'belt') {
+    const isBeltLike = (t) => t === 'belt' || t === 'belt_fast' || t === 'belt_slow';
+
+    // Cintas del mismo tipo sobre sí mismas: rotar dirección
+    if (existing && isBeltLike(existing.type) && existing.type === this.selectedTool) {
+      const oldDir = existing.dir;
       if (existing.dir !== this.placementDir) {
         existing.dir = this.placementDir;
-        this.renderer.addPlacementEffect(x, y, 'belt');
-        this.audio.playChainPlaf();
-        this.updateGhost(x, y);
+      } else {
+        existing.dir = (existing.dir + 1) % 4;
+        this.placementDir = existing.dir;
       }
+      this.recordAction({
+        type: 'rotate',
+        x, y,
+        prevDir: oldDir,
+        newDir: existing.dir
+      });
+      this.renderer.addPlacementEffect(x, y, this.selectedTool);
+      this.audio.playChainPlaf();
+      this.updateGhost(x, y);
       return;
     }
 
@@ -3515,26 +4880,49 @@ export class BeltFlowGame {
       y: y,
       type: this.selectedTool,
       dir: this.placementDir,
-      color: this.selectedTool === 'painter' ? this.painterColor : null,
+      color: (this.selectedTool === 'painter' || this.selectedTool === 'filter') ? this.painterColor : null,
       shape: null,
       fixed: false
     };
 
+    this.recordAction({
+      type: 'place',
+      x, y,
+      prevPiece: existing ? { ...existing } : null,
+      newPiece: { ...newPiece }
+    });
+
     this.grid.set(x, y, newPiece);
     this.renderer.addPlacementEffect(x, y, this.selectedTool);
-    if (this.selectedTool === 'belt') {
+
+    if (isBeltLike(this.selectedTool)) {
       this.audio.playChainPlaf();
+    } else if (this.selectedTool === 'splitter') {
+      this.audio.playSplitter();
     } else {
       this.audio.playPlaf();
     }
+
+    this.updateBudgetHUD();
     this.updateGhost(x, y);
+    this.checkAchievements();
   }
 
   removePieceAt(x, y) {
     if (this.mode === 'view') return;
+    const existing = this.grid.get(x, y);
+    if (!existing || existing.fixed) return;
+
+    this.recordAction({
+      type: 'remove',
+      x, y,
+      prevPiece: { ...existing }
+    });
+
     const removed = this.grid.remove(x, y);
     if (removed) {
       this.audio.playDelete();
+      this.updateBudgetHUD();
       this.updateGhost(x, y);
     }
   }
@@ -3620,6 +5008,7 @@ export class BeltFlowGame {
       }
 
       this.ui.updateQuota(this.deliveredCount, this.totalQuota, this.currentDemands);
+      this.checkAchievements();
 
       const allComplete = this.currentDemands.every(d => d.delivered >= d.quota);
       if (allComplete) {
@@ -3629,7 +5018,7 @@ export class BeltFlowGame {
       this.totalErrors++;
       this.streak = 0;
 
-      if (this.currentLevel.hasLives) {
+      if (this.gameMode === 'challenge' && this.currentLevel.hasLives) {
         this.lives = Math.max(0, this.lives - 1);
         this.audio.playError();
         this.ui.updateLives(this.lives, true);
@@ -3639,6 +5028,10 @@ export class BeltFlowGame {
         if (this.lives <= 0) {
           this.handleGameOver();
         }
+      } else {
+        this.audio.playTone(280, 'sine', 0.08, 0.02);
+        this.renderer.addParticles(screenPos.x, screenPos.y, 8, '#E8A0A0');
+        this.ui.showToast("🍃 Forma incorrecta descartada (Modo Zen sin penalización)", 1500);
       }
     }
   }
@@ -3670,10 +5063,13 @@ export class BeltFlowGame {
       this.saveData.mejoresTiempos[lvlId] = currentTime;
     }
 
-    // Cálculo de Estrellas (Oro, Plata, Bronce)
+    // Cálculo multidimensional de estrellas (tiempo y presupuesto)
     const starsConfig = this.currentLevel.stars || { gold: 30, silver: 60, bronze: 120 };
     let starsEarned = 1;
-    if (currentTime <= starsConfig.gold) {
+    const usedPieces = this.grid.getAllPieces().filter(p => !p.fixed).length;
+    const withinBudget = !this.currentLevel.maxPieces || (usedPieces <= this.currentLevel.maxPieces);
+
+    if (currentTime <= starsConfig.gold && withinBudget) {
       starsEarned = 3;
     } else if (currentTime <= starsConfig.silver) {
       starsEarned = 2;
@@ -3687,6 +5083,11 @@ export class BeltFlowGame {
       this.saveData.estrellas[lvlId] = starsEarned;
     }
 
+    // Monedas de Estrella
+    const coinsWon = starsEarned * 10;
+    this.saveData.coins = (this.saveData.coins || 0) + coinsWon;
+
+    this.checkAchievements();
     this.autoSave();
     this.ui.updateMenuStats();
 
@@ -3723,11 +5124,118 @@ export class BeltFlowGame {
 
   loadNextLevel() {
     const nextId = this.currentLevel.id + 1;
-    if (nextId <= LEVELS.length) {
+    if (nextId <= 60 && nextId <= LEVELS.length) {
       this.loadLevel(nextId);
     } else {
-      this.ui.showToast("¡Has completado todos los 40 niveles de BeltFlow! Enhorabuena maestro.", 4500);
-      this.loadLevel(40);
+      this.ui.showToast("🎉 ¡Has completado todos los 60 niveles de BeltFlow v3.0! Enhorabuena maestro.", 5000);
+      this.loadLevel(60);
+    }
+  }
+
+  buySkin(skinId) {
+    const skin = COSMETIC_SKINS.find(s => s.id === skinId);
+    if (!skin) return;
+    if ((this.saveData.coins || 0) >= skin.cost) {
+      this.saveData.coins -= skin.cost;
+      this.saveData.unlockedCosmetics = this.saveData.unlockedCosmetics || ['default'];
+      if (!this.saveData.unlockedCosmetics.includes(skinId)) {
+        this.saveData.unlockedCosmetics.push(skinId);
+      }
+      this.saveData.cosmetics = this.saveData.cosmetics || {};
+      this.saveData.cosmetics.beltSkin = skinId;
+      this.audio.playPlaf();
+      this.ui.showToast(`🎀 ¡Aspecto "${skin.name}" desbloqueado y equipado!`, 2500);
+      this.checkAchievements();
+      this.autoSave();
+      this.ui.updateMenuStats();
+    }
+  }
+
+  equipSkin(skinId) {
+    if (!this.saveData.unlockedCosmetics?.includes(skinId)) return;
+    this.saveData.cosmetics = this.saveData.cosmetics || {};
+    this.saveData.cosmetics.beltSkin = skinId;
+    this.audio.playRotate();
+    const skin = COSMETIC_SKINS.find(s => s.id === skinId);
+    this.ui.showToast(`🎀 Aspecto "${skin ? skin.name : skinId}" equipado`, 1800);
+    this.checkAchievements();
+    this.autoSave();
+  }
+
+  unlockAchievement(achId) {
+    this.saveData.achievements = this.saveData.achievements || [];
+    if (this.saveData.achievements.includes(achId)) return;
+    this.saveData.achievements.push(achId);
+    const ach = ACHIEVEMENTS.find(a => a.id === achId);
+    if (!ach) return;
+
+    this.saveData.coins = (this.saveData.coins || 0) + 15;
+    this.audio.playAchievement();
+    this.ui.showToast(`🏆 ¡Logro: ${ach.name}! (+15 🪙)`, 3200);
+    this.autoSave();
+    this.ui.updateMenuStats();
+  }
+
+  checkAchievements() {
+    this.saveData.achievements = this.saveData.achievements || [];
+    const save = this.saveData;
+    const completed = save.nivelesCompletados || [];
+
+    // Primeros pasos
+    if (this.grid.getAllPieces().some(p => p.type === 'belt' || p.type === 'belt_fast' || p.type === 'belt_slow')) {
+      this.unlockAchievement('first_belt');
+    }
+
+    // Capítulos
+    if (completed.length >= 5) this.unlockAchievement('level_5');
+    if (completed.includes(20)) this.unlockAchievement('chapter_1');
+    if (completed.includes(40)) this.unlockAchievement('chapter_2');
+    if (completed.includes(60)) this.unlockAchievement('chapter_3');
+
+    // Mecánicas
+    if (this.sim.totalSplittersProcessed >= 50) this.unlockAchievement('splitter_pro');
+    if (this.sim.totalCrossingsTraversed >= 100) this.unlockAchievement('crossing_ace');
+    if (this.sim.totalFiltersProcessed >= 50) this.unlockAchievement('filter_master');
+    if (this.sim.totalPortalsTraversed >= 50) this.unlockAchievement('portal_traveler');
+
+    // Buffer lleno
+    const anyFull = this.grid.getAllPieces().some(p => p.type === 'buffer' && (p.bufferQueue?.length || 0) >= 6);
+    if (anyFull) this.unlockAchievement('buffer_full');
+
+    // Tasa de producción
+    if (this.sim.currentThroughputRate >= 1.5) this.unlockAchievement('speed_demon');
+
+    // Racha
+    if (this.streak >= 20) this.unlockAchievement('streak_20');
+    if (this.streak >= 50) this.unlockAchievement('streak_50');
+
+    // Reparación
+    if (completed.includes(57)) this.unlockAchievement('repairman');
+
+    // Presupuesto
+    if (this.currentLevel?.maxPieces && completed.includes(this.currentLevel.id)) {
+      const used = this.grid.getAllPieces().filter(p => !p.fixed).length;
+      if (used <= this.currentLevel.maxPieces) this.unlockAchievement('budget_hero');
+    }
+
+    // Estrellas
+    let goldCount = 0;
+    let totalStars = 0;
+    if (save.estrellas) {
+      Object.values(save.estrellas).forEach(s => {
+        if (s >= 3) goldCount++;
+        totalStars += (s || 0);
+      });
+    }
+    if (goldCount >= 5) this.unlockAchievement('gold_hunter_5');
+    if (goldCount >= 20) this.unlockAchievement('gold_hunter_20');
+    if (goldCount >= 40) this.unlockAchievement('gold_hunter_40');
+    if (totalStars >= 50) this.unlockAchievement('star_collector_50');
+    if (totalStars >= 120) this.unlockAchievement('star_collector_120');
+
+    // Cosméticos
+    if (save.cosmetics?.beltSkin && save.cosmetics.beltSkin !== 'default') {
+      this.unlockAchievement('cosmetic_enthusiast');
     }
   }
 
@@ -3790,9 +5298,32 @@ export class BeltFlowGame {
       this.timeElapsed += dt * this.speedMult;
       this.sim.update(dt, this.speedMult);
 
-      if (this.currentLevel.timeLimit) {
+      // Música ambiental generativa (acordes pentatónicos suaves cada 8s según bioma)
+      this.ambientTimer += dt;
+      if (this.ambientTimer >= 8.0) {
+        this.ambientTimer = 0;
+        if (this.audio && this.audio.enabled && this.saveData?.config?.ambientMusic !== false) {
+          const lvlId = this.currentLevel?.id || 1;
+          const biomeIdx = lvlId > 40 ? 3 : (lvlId > 20 ? 2 : 1);
+          this.audio.playAmbientChime(biomeIdx);
+        }
+      }
+
+      // Actualizar medidor de flujo sostenido en HUD
+      if (this.currentLevel && this.currentLevel.targetRate) {
+        const rateEl = document.getElementById('hud-rate-display');
+        if (rateEl) {
+          rateEl.textContent = `${this.sim.currentThroughputRate.toFixed(1)} / ${this.currentLevel.targetRate}/s`;
+        }
+      }
+
+      // Gestión de cronómetro según modo de juego
+      if (this.gameMode === 'challenge' && this.currentLevel.timeLimit) {
         const timeLeft = Math.max(0, this.currentLevel.timeLimit - this.timeElapsed);
         this.ui.updateTimer(timeLeft, timeLeft <= 30);
+        if (timeLeft <= 0) {
+          this.handleGameOver();
+        }
       } else {
         this.ui.updateTimer(null);
       }
