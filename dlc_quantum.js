@@ -80,6 +80,24 @@ export const DLC_ITEMS = {
     border: '#C9B6E4',
     description: 'Materia exótica condensada en suspensión cuántica.'
   },
+  shape_half: {
+    id: 'shape_half',
+    name: 'Mitad Geométrica',
+    tier: 1,
+    icon: '🌓',
+    color: '#A9CCE3',
+    border: '#5DADE2',
+    description: 'Mitad de forma geométrica sin ensamblar.'
+  },
+  combined_shape: {
+    id: 'combined_shape',
+    name: 'Forma Compuesta',
+    tier: 1,
+    icon: '🔷',
+    color: '#A8D5BA',
+    border: '#48C78E',
+    description: 'Forma geométrica completa fusionada.'
+  },
   sugar_cube: {
     id: 'sugar_cube',
     name: 'Terrón de Azúcar',
@@ -119,6 +137,17 @@ export const DLC_ITEMS = {
 };
 
 export const RECIPES = [
+  {
+    id: 'combine_shapes',
+    name: 'Ensamblaje de Formas',
+    tier: 1,
+    machineRequirement: 'any', // factory_1x1 o factory_2x2
+    isGeometric: true,
+    inputs: { shape_half: 2 },
+    output: 'combined_shape',
+    time: 1.0,
+    description: 'Une 2 mitades geométricas en una forma compuesta'
+  },
   {
     id: 'sugar_cube',
     name: 'Terrón de Azúcar',
@@ -889,7 +918,7 @@ export class QuantumDLC {
 
     // Núcleo rotatorio cuando está crafteando
     ctx.save();
-    const rotSpeed = piece.isCrafting ? performance.now() * 0.004 : 0;
+    const rotSpeed = piece.isCrafting ? performance.now() * 0.005 : performance.now() * 0.001;
     ctx.rotate(rotSpeed);
     ctx.strokeStyle = piece.isCrafting ? '#A8D5BA' : 'rgba(168, 213, 186, 0.4)';
     ctx.lineWidth = 2.0;
@@ -1132,6 +1161,11 @@ export class QuantumDLC {
    */
   static openRecipeSelector(game, factoryPiece) {
     if (!factoryPiece) return;
+
+    if (game && game.ui && typeof game.ui.openMachineSidebar === 'function') {
+      game.ui.openMachineSidebar(factoryPiece);
+      return;
+    }
 
     // Obtener la raíz si es parte de un 2x2
     const target = factoryPiece.type === 'factory_2x2_part'

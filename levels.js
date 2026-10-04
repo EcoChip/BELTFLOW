@@ -287,7 +287,7 @@ export const LEVELS = [
     ]
   },
 
-  // Nivel 14: Mezcladora (Mixer)
+  // Nivel 14: Fabricador (Ensamblaje)
   {
     id: 14,
     name: "Fusión Armónica",
@@ -297,7 +297,7 @@ export const LEVELS = [
     quota: 10,
     stars: { gold: 91, silver: 151, bronze: 229 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'trash', 'tunnel'],
+    availableTools: ['belt', 'extractor', 'cutter', 'factory_1x1', 'trash', 'tunnel'],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
@@ -315,7 +315,7 @@ export const LEVELS = [
     quota: 10,
     stars: { gold: 98, silver: 162, bronze: 246 },
     targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER),
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
       { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
@@ -333,7 +333,7 @@ export const LEVELS = [
     quota: 12,
     stars: { gold: 102, silver: 168, bronze: 255 },
     targetShape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH),
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.PEACH],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT), fixed: true },
@@ -352,7 +352,7 @@ export const LEVELS = [
     quota: 12,
     stars: { gold: 105, silver: 174, bronze: 264 },
     targetShape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY),
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL, PASTEL_COLORS.SKY],
     fixedGrid: [
       { x: 4, y: 4, type: 'mine', dir: 1, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
@@ -379,7 +379,7 @@ export const LEVELS = [
       { id: 'salida_a', name: 'Medio Círculo Menta', shape: { left: { type: SHAPE_TYPES.CIRCLE, color: PASTEL_COLORS.MINT }, right: null }, quota: 7, deliveryIndex: 0 },
       { id: 'salida_b', name: 'Círculo Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER), quota: 7, deliveryIndex: 1 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
@@ -402,7 +402,7 @@ export const LEVELS = [
     demands: [
       { id: 'estrella_rombo', name: 'Estrella-Rombo', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH), quota: 25 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL, PASTEL_COLORS.PEACH],
     fixedGrid: [
       { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
@@ -426,7 +426,7 @@ export const LEVELS = [
     demands: [
       { id: 'estrella_rombo_master', name: 'Estrella-Rombo Menta/Lavanda', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.MINT, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 30 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: false },
@@ -594,7 +594,7 @@ export const LEVELS = [
     demands: [
       { id: 'circulo_bicolor', name: 'Círculo Menta-Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER), quota: 12 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
       { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
@@ -670,7 +670,7 @@ export const LEVELS = [
     demands: [
       { id: 'circulo_triangulo_30', name: 'Círculo-Triángulo', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.PEACH), quota: 18 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY), fixed: true },
@@ -738,7 +738,7 @@ export const LEVELS = [
     demands: [
       { id: 'circulo_estrella_33', name: 'Círculo-Estrella Menta/Lavanda', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.LAVENDER), quota: 12 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
       { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
@@ -761,7 +761,7 @@ export const LEVELS = [
     demands: [
       { id: 'circulo_triangulo_34', name: 'Círculo Coral / Triángulo Cielo', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.CORAL, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY), quota: 12 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.CORAL],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
@@ -785,7 +785,7 @@ export const LEVELS = [
       { id: 'sim_a', name: 'Cuadrado / Círculo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH), quota: 10 },
       { id: 'sim_b', name: 'Círculo / Cuadrado', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.PEACH, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), fixed: true },
@@ -881,7 +881,7 @@ export const LEVELS = [
       { id: 'rombo_estrella_39', name: 'Rombo-Estrella Bicolor', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT, SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 15 },
       { id: 'cuadrado_cielo_39', name: 'Cuadrado Cielo', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 15 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL],
     fixedGrid: [
       { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
@@ -908,7 +908,7 @@ export const LEVELS = [
       { id: 'd40_3', name: 'Triángulo / Círculo Coral-Menta', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.CORAL, SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), quota: 10 },
       { id: 'd40_4', name: 'Rombo / Estrella Durazno-Cielo', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.PEACH, SHAPE_TYPES.STAR, PASTEL_COLORS.SKY), quota: 10 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'trash'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
     fixedGrid: [
       { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: false },
@@ -1349,13 +1349,13 @@ export const LEVELS = [
     demands: [
       { id: 'rep_combo_57', name: 'Círculo-Cuadrado Reparado', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT, SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 15 }
     ],
-    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'mixer', 'erase'],
+    availableTools: ['belt', 'extractor', 'cutter', 'painter', 'factory_1x1', 'erase'],
     allowedColors: [PASTEL_COLORS.SKY],
     fixedGrid: [
       { x: 3, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true },
       { x: 3, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
       { x: 7, y: 11, type: 'painter', dir: 0, color: PASTEL_COLORS.SKY, fixed: false },
-      { x: 12, y: 8, type: 'mixer', dir: 0, fixed: false },
+      { x: 12, y: 8, type: 'factory_1x1', dir: 0, fixed: false },
       { x: 17, y: 8, type: 'delivery', dir: 2, fixed: true }
     ]
   },
@@ -1405,7 +1405,7 @@ export const LEVELS = [
       { id: 'sinf_2_59', name: 'Cuadrado Cielo Pulido', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY), quota: 10 },
       { id: 'sinf_3_59', name: 'Rombo Lavanda Pintado', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER), quota: 10 }
     ],
-    availableTools: ['belt', 'belt_fast', 'extractor', 'cutter', 'painter', 'mixer', 'splitter', 'crossing', 'buffer', 'trash'],
+    availableTools: ['belt', 'belt_fast', 'extractor', 'cutter', 'painter', 'factory_1x1', 'splitter', 'crossing', 'buffer', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL, PASTEL_COLORS.LAVENDER],
     fixedGrid: [
       { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: true },
@@ -1435,7 +1435,7 @@ export const LEVELS = [
       { id: 'd60_3', name: 'Triángulo Lavanda Puro', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 10 },
       { id: 'd60_4', name: 'Rombo / Estrella Cielo-Coral', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY, SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), quota: 10 }
     ],
-    availableTools: ['belt', 'belt_fast', 'belt_slow', 'extractor', 'cutter', 'painter', 'mixer', 'tunnel', 'splitter', 'merger', 'filter', 'crossing', 'buffer', 'trash'],
+    availableTools: ['belt', 'belt_fast', 'belt_slow', 'extractor', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'splitter', 'merger', 'filter', 'crossing', 'buffer', 'trash'],
     allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
     fixedGrid: [
       { x: 3, y: 3, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.CORAL), fixed: false },
@@ -1618,7 +1618,7 @@ export const ACHIEVEMENTS = [
   { id: 'streak_20', icon: '✨', name: "Cadena Perfecta", desc: "Alcanza una racha continua de 20 entregas sin fallos." },
   { id: 'streak_50', icon: '💫', name: "Flujo Infinito", desc: "Alcanza una racha continua de 50 entregas." },
   { id: 'painter_guru', icon: '🎨', name: "Arcoíris Suave", desc: "Pinta piezas con los 5 colores pastel." },
-  { id: 'mixer_virtuoso', icon: '⚗️', name: "Alquimista Geométrico", desc: "Combina 50 formas compuestas en la mezcladora." },
+  { id: 'mixer_virtuoso', icon: '🏭', name: "Maestro Fabricador", desc: "Combina o sintetiza 50 productos en el Fabricador." },
   { id: 'cutter_precision', icon: '✂️', name: "Bisturí de Precisión", desc: "Corta 50 formas en mitades perfectas." },
   { id: 'star_collector_50', icon: '⭐', name: "Cielo Estrellado", desc: "Acumula 50 estrellas en total." },
   { id: 'star_collector_120', icon: '🌟', name: "Constelación Suprema", desc: "Acumula 120 estrellas." },

@@ -624,11 +624,24 @@ export class Grid {
     return Array.from(this.mines.values());
   }
 
+  inBounds(x, y) {
+    return x >= 0 && x < this.size && y >= 0 && y < this.size;
+  }
+
   remove(x, y) {
     const piece = this.get(x, y);
     if (piece && piece.fixed) return false;
     if (piece && (piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part')) {
       return QuantumDLC.removeFactory2x2(this, x, y);
+    }
+    if (piece && (piece.type === 'cutter' || piece.type === 'cutter_part')) {
+      const rx = piece.rootX !== undefined ? piece.rootX : piece.x;
+      const ry = piece.rootY !== undefined ? piece.rootY : piece.y;
+      const dir = piece.dir || 0;
+      const rVec = DIR_DELTA[(dir + 1) % 4];
+      this.cells.delete(this.key(rx, ry));
+      this.cells.delete(this.key(rx + rVec.x, ry + rVec.y));
+      return true;
     }
     this.cells.delete(this.key(x, y));
     return true;
@@ -854,8 +867,8 @@ export class Simulation {
         continue;
       }
 
-      // Mezcladora
-      if (piece.type === 'mixer') {
+      // Fabricador / Mezcladora (Ensamblaje y combinación de formas geométricas)
+      if (piece.type === 'mixer' || (piece.type === 'factory_1x1' && (!item.shape || !item.shape.dlcItem))) {
         item.processingTimer = (item.processingTimer || 0) + effectiveDt;
         if (item.progress < 0.5) {
           item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
@@ -876,7 +889,7 @@ export class Simulation {
               this.items.splice(otherIdx, 1);
               const currentIdx = this.items.indexOf(item);
               if (currentIdx !== -1) this.items.splice(currentIdx, 1);
-              this.triggerMachineAnim(piece.x, piece.y, 'mixer_spin', { dir: piece.dir });
+              this.triggerMachineAnim(piece.x, piece.y, 'factory_crafted', { dir: piece.dir, type: piece.type });
               this.spawnItem(combined, outX, outY, piece.dir);
               continue;
             } else if (item.processingTimer > 1.8 && item.shape.left && item.shape.right) {
@@ -1245,13 +1258,16 @@ export class Simulation {
       return incomingDir === piece.dir;
     }
 
-    // Cortadora y Pintor (entrada trasera en línea)
+    // Cortadora (solo por detrás en celda raíz) y Pintor
     if (piece.type === 'cutter' || piece.type === 'painter') {
       return incomingDir === piece.dir;
     }
+    if (piece.type === 'cutter_part') {
+      return false; // la celda secundaria es solo salida
+    }
 
-    // Mezcladora (acepta por ambos laterales y por detrás)
-    if (piece.type === 'mixer') {
+    // Fabricador / Mezcladora (acepta por ambos laterales y por detrás)
+    if (piece.type === 'mixer' || piece.type === 'factory_1x1') {
       const leftDir = (piece.dir + 1) % 4;
       const rightDir = (piece.dir + 3) % 4;
       return incomingDir === piece.dir || incomingDir === leftDir || incomingDir === rightDir;
@@ -1288,29 +1304,31 @@ export class Simulation {
       return false;
     }
 
+    // Cortadora de 2 Bloques (Cutter 2x1)
     if (piece.type === 'cutter') {
       const { leftHalf, rightHalf } = Shapes.cut(item.shape);
 
-      // Salida izquierda: recta hacia piece.dir
+      // Salida izquierda: recta hacia piece.dir desde celda raíz (piece.x, piece.y)
       const fDelta = DIR_DELTA[piece.dir];
       const fX = piece.x + fDelta.x;
       const fY = piece.y + fDelta.y;
       const fPiece = this.grid.get(fX, fY);
 
-      // Salida derecha: giro 90° a la derecha (dir + 1) % 4
-      const rightDir = (piece.dir + 1) % 4;
-      const rDelta = DIR_DELTA[rightDir];
-      const rX = piece.x + rDelta.x;
-      const rY = piece.y + rDelta.y;
-      const rPiece = this.grid.get(rX, rY);
+      // Salida derecha: recta hacia piece.dir desde celda secundaria (secX, secY)
+      const rVec = DIR_DELTA[(piece.dir + 1) % 4];
+      const secX = piece.x + rVec.x;
+      const secY = piece.y + rVec.y;
+      const rOutX = secX + fDelta.x;
+      const rOutY = secY + fDelta.y;
+      const rPiece = this.grid.get(rOutX, rOutY);
 
       const canLeft = !leftHalf || (fPiece && this.canAcceptItem(fPiece, piece.dir) && !this.items.some(it => it.x === fX && it.y === fY && it.progress < 0.35));
-      const canRight = !rightHalf || (rPiece && this.canAcceptItem(rPiece, rightDir) && !this.items.some(it => it.x === rX && it.y === rY && it.progress < 0.35));
+      const canRight = !rightHalf || (rPiece && this.canAcceptItem(rPiece, piece.dir) && !this.items.some(it => it.x === rOutX && it.y === rOutY && it.progress < 0.35));
 
       if (canLeft && canRight) {
         this.triggerMachineAnim(piece.x, piece.y, 'cutter_flash', { dir: piece.dir });
         if (leftHalf && fPiece) this.spawnItem(leftHalf, fX, fY, piece.dir);
-        if (rightHalf && rPiece) this.spawnItem(rightHalf, rX, rY, rightDir);
+        if (rightHalf && rPiece) this.spawnItem(rightHalf, rOutX, rOutY, piece.dir);
         return true;
       }
       return false;
@@ -1939,13 +1957,16 @@ export class Renderer {
         this.renderTrashTile(ctx, s);
         break;
       case 'cutter':
-        this.renderCutterTile(ctx, s);
+        this.renderCutterTile(ctx, piece, s);
+        break;
+      case 'cutter_part':
+        // Dibujada conjuntamente por la celda raíz de 2 bloques
         break;
       case 'painter':
         this.renderPainterTile(ctx, piece, s);
         break;
       case 'mixer':
-        this.renderMixerTile(ctx, s);
+        QuantumDLC.renderFactory1x1(this, ctx, piece, s);
         break;
       case 'tunnel':
         this.renderTunnelTile(ctx, s);
@@ -2099,9 +2120,17 @@ export class Renderer {
         ctx.restore();
       }
     } else {
-      // Cinta recta estándar
+      // Cinta recta estándar conectada
+      const frontDelta = DIR_DELTA[dir];
+      const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
+      const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
+
+      this.drawBeltBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, hasBackInput, hasFrontOutput);
+
+      const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
+      const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
       ctx.fillStyle = trackColor;
-      ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+      ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
 
       ctx.strokeStyle = arrowColor;
       ctx.lineWidth = 2.2;
@@ -2121,25 +2150,67 @@ export class Renderer {
     }
   }
 
+  // Base unificada continua para cintas que conecta casillas consecutivas sin separaciones
+  drawBeltBase(ctx, s, dark1, dark2, light1, light2, hasBack, hasFront) {
+    const grad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
+    if (this.isDark) {
+      grad.addColorStop(0, dark1);
+      grad.addColorStop(1, dark2);
+    } else {
+      grad.addColorStop(0, light1);
+      grad.addColorStop(1, light2);
+    }
+    ctx.fillStyle = grad;
+
+    const leftX = hasBack ? -s / 2 : -s / 2 + 2;
+    const rightX = hasFront ? s / 2 : s / 2 - 2;
+    const w = rightX - leftX;
+    const h = s - 4;
+    const y = -s / 2 + 2;
+
+    const tl = hasBack ? 0 : 6;
+    const bl = hasBack ? 0 : 6;
+    const tr = hasFront ? 0 : 6;
+    const br = hasFront ? 0 : 6;
+
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(leftX, y, w, h, [tl, tr, br, bl]);
+      ctx.fill();
+
+      ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(leftX, y + 0.5, w, h - 1, [tl, tr, br, bl]);
+      ctx.stroke();
+    } else {
+      ctx.fillRect(leftX, y, w, h);
+    }
+  }
+
   renderExtractorTile(ctx, piece, s) {
     this.drawTileBase(ctx, s, '#323B47', '#252B35', '#F5F2EB', '#DDD8CD', 8);
 
-    // Boquilla / Flecha de eyección al frente
+    const time = performance.now() * 0.003;
+    const pumpPulse = Math.sin(time * 4) * 2.2;
+
+    // Boquilla / Flecha de eyección al frente con pulso de bombeo
     ctx.fillStyle = this.isDark ? '#A8D5BA' : '#5CA477';
     ctx.beginPath();
-    ctx.moveTo(s / 2 - 8, -6);
-    ctx.lineTo(s / 2 - 2, 0);
-    ctx.lineTo(s / 2 - 8, 6);
+    ctx.moveTo(s / 2 - 8 + pumpPulse * 0.5, -6);
+    ctx.lineTo(s / 2 - 2 + pumpPulse * 0.5, 0);
+    ctx.lineTo(s / 2 - 8 + pumpPulse * 0.5, 6);
     ctx.closePath();
     ctx.fill();
 
-    // Cámara cilíndrica central de extracción
+    // Cámara cilíndrica central de extracción con animación rítmica
+    const chamberR = s * 0.28 + pumpPulse * 0.4;
     ctx.fillStyle = this.isDark ? 'rgba(0, 0, 0, 0.32)' : 'rgba(255, 255, 255, 0.65)';
     ctx.beginPath();
-    ctx.arc(0, 0, s * 0.28, 0, Math.PI * 2);
+    ctx.arc(0, 0, chamberR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)';
+    ctx.strokeStyle = this.isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.12)';
     ctx.lineWidth = 1.4;
     ctx.stroke();
 
@@ -2151,6 +2222,9 @@ export class Renderer {
   renderTrashTile(ctx, s) {
     this.drawTileBase(ctx, s, '#3E2D33', '#2C2024', '#F8E2E0', '#ECD0CD', 8);
 
+    const time = performance.now() * 0.002;
+    const rot = time % (Math.PI * 2);
+
     ctx.strokeStyle = '#E8A0A0';
     ctx.lineWidth = 2.4;
     ctx.lineCap = 'round';
@@ -2159,52 +2233,138 @@ export class Renderer {
     ctx.arc(0, 0, s * 0.24, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Cuchillas giratorias internas
+    ctx.save();
+    ctx.rotate(rot);
     ctx.beginPath();
     ctx.moveTo(-6, -6);
     ctx.lineTo(6, 6);
     ctx.moveTo(6, -6);
     ctx.lineTo(-6, 6);
     ctx.stroke();
+    ctx.restore();
   }
 
-  renderCutterTile(ctx, s) {
-    this.drawTileBase(ctx, s, '#2B3744', '#202933', '#E6EEF5', '#CFDFED', 8);
+  // Cortadora de 2 Bloques (Cutter 2x1) idéntica a la vista previa del jugador
+  renderCutterTile(ctx, piece, s) {
+    const isDark = this.isDark;
+    const time = performance.now() * 0.003;
+    const snip = Math.sin(time * 5) * 0.18;
 
-    ctx.strokeStyle = '#A9CCE3';
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.25, -s * 0.25);
-    ctx.lineTo(s * 0.25, s * 0.25);
+    // 1. Chasis unificado de 2 bloques (cubre raíz en y=0 y secundaria en y=s)
+    const chassisGrad = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, 1.5 * s);
+    if (isDark) {
+      chassisGrad.addColorStop(0, '#2A3440');
+      chassisGrad.addColorStop(1, '#1E252E');
+    } else {
+      chassisGrad.addColorStop(0, '#E6EEF5');
+      chassisGrad.addColorStop(1, '#D0DFED');
+    }
+    ctx.fillStyle = chassisGrad;
+
+    const x0 = -s / 2 + 2;
+    const x1 = s / 2 - 2;
+    const y0 = -s / 2 + 2;
+    const y1 = 1.5 * s - 2;
+
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+
+    ctx.strokeStyle = isDark ? '#3D4F61' : '#94B4D0';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = '#A9CCE3';
-    // Delante (izq)
+    // 2. Carril izquierdo (Celda raíz: de entrada trasera a salida frontal)
+    const trackColor = isDark ? '#1C232B' : '#B8D1E6';
+    const accentColor = '#5DADE2';
+
+    ctx.strokeStyle = trackColor;
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(s / 2 - 8, -4);
-    ctx.lineTo(s / 2 - 2, 0);
-    ctx.lineTo(s / 2 - 8, 4);
+    ctx.moveTo(-s / 2 + 4, 0);
+    ctx.lineTo(s / 2 - 4, 0);
+    ctx.stroke();
+
+    // Flecha indicadora en carril izquierdo
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    ctx.moveTo(s / 2 - 14, -4.5);
+    ctx.lineTo(s / 2 - 5, 0);
+    ctx.lineTo(s / 2 - 14, 4.5);
     ctx.fill();
 
-    // Derecha (der)
+    // 3. Carril derecho (Celda secundaria: ramal curvado hacia la salida derecha)
+    ctx.strokeStyle = trackColor;
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
-    ctx.moveTo(-4, s / 2 - 8);
-    ctx.lineTo(0, s / 2 - 2);
-    ctx.lineTo(4, s / 2 - 8);
+    ctx.moveTo(-s * 0.15, 0);
+    ctx.lineTo(s * 0.1, s * 0.5);
+    ctx.lineTo(s / 2 - 4, s);
+    ctx.stroke();
+
+    // Flecha indicadora en carril derecho
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    ctx.moveTo(s / 2 - 14, s - 4.5);
+    ctx.lineTo(s / 2 - 5, s);
+    ctx.lineTo(s / 2 - 14, s + 4.5);
     ctx.fill();
+
+    // 4. Mecanismo central de tijeras en la divisoria
+    ctx.save();
+    ctx.translate(-2, s * 0.5);
+
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.arc(-8, -6, 4.5, 0, Math.PI * 2);
+    ctx.arc(-8, 6, 4.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-4, -3);
+    ctx.lineTo(9, snip * 8);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-4, 3);
+    ctx.lineTo(9, -snip * 8);
+    ctx.stroke();
+
+    ctx.fillStyle = isDark ? '#FFFFFF' : '#2980B9';
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 
   renderPainterTile(ctx, piece, s) {
     const colorHex = COLOR_HEX[piece.color || 'lavender'];
     this.drawTileBase(ctx, s, '#352C3E', '#261F2E', '#F1EBF7', '#E0D4EC', 8);
 
+    const time = performance.now() * 0.003;
+    const dropPulse = 1.0 + Math.sin(time * 3.5) * 0.08;
+
     ctx.fillStyle = colorHex;
     ctx.beginPath();
-    ctx.arc(0, 0, s * 0.26, 0, Math.PI * 2);
+    ctx.arc(0, 0, s * 0.26 * dropPulse, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = this.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
+
+    // Gotita superior
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.26 * dropPulse * 0.85, 2.5, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.fillStyle = colorHex;
     ctx.beginPath();
@@ -2274,12 +2434,23 @@ export class Renderer {
   }
 
   renderFastBeltTile(ctx, piece, s) {
-    this.drawTileBase(ctx, s, '#1D2F38', '#142229', '#E0F2FE', '#BAE6FD', 6);
+    const dir = piece?.dir || 0;
+    const backDelta = DIR_DELTA[(dir + 2) % 4];
+    const backPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y) : null;
+    const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
+
+    const frontDelta = DIR_DELTA[dir];
+    const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
+    const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
+
+    this.drawBeltBase(ctx, s, '#1D2F38', '#142229', '#E0F2FE', '#BAE6FD', hasBackInput, hasFrontOutput);
     const trackColor = this.isDark ? '#1E3A4B' : '#BAE6FD';
     const arrowColor = this.isDark ? '#38BDF8' : '#0284C7';
 
+    const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
+    const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
     ctx.fillStyle = trackColor;
-    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+    ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
 
     ctx.strokeStyle = arrowColor;
     ctx.lineWidth = 2.4;
@@ -2300,12 +2471,23 @@ export class Renderer {
   }
 
   renderSlowBeltTile(ctx, piece, s) {
-    this.drawTileBase(ctx, s, '#382E26', '#2A221B', '#FDF4EC', '#F4DEC9', 6);
+    const dir = piece?.dir || 0;
+    const backDelta = DIR_DELTA[(dir + 2) % 4];
+    const backPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y) : null;
+    const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
+
+    const frontDelta = DIR_DELTA[dir];
+    const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
+    const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
+
+    this.drawBeltBase(ctx, s, '#382E26', '#2A221B', '#FDF4EC', '#F4DEC9', hasBackInput, hasFrontOutput);
     const trackColor = this.isDark ? '#4A3B2E' : '#E8CCA8';
     const arrowColor = this.isDark ? '#F59E0B' : '#B45309';
 
+    const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
+    const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
     ctx.fillStyle = trackColor;
-    ctx.fillRect(-s / 2 + 4, -s * 0.28, s - 8, s * 0.56);
+    ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
 
     ctx.strokeStyle = arrowColor;
     ctx.lineWidth = 2.0;
@@ -2642,6 +2824,29 @@ export class Renderer {
           ctx.stroke();
         }
       }
+      if (ghost.type === 'cutter') {
+        const s = this.tileSize;
+        const dir = ghost.dir || 0;
+        const rightDelta = DIR_DELTA[(dir + 1) % 4];
+        const partX = ghost.x + rightDelta.x;
+        const partY = ghost.y + rightDelta.y;
+
+        ctx.fillStyle = ghost.valid ? 'rgba(93, 173, 226, 0.22)' : 'rgba(232, 160, 160, 0.35)';
+        ctx.strokeStyle = ghost.valid ? '#5DADE2' : '#E8A0A0';
+        ctx.lineWidth = 1.6;
+
+        [{ x: ghost.x, y: ghost.y }, { x: partX, y: partY }].forEach(pos => {
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(pos.x * s + 2, pos.y * s + 2, s - 4, s - 4, 8);
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            ctx.fillRect(pos.x * s + 2, pos.y * s + 2, s - 4, s - 4);
+            ctx.strokeRect(pos.x * s + 2, pos.y * s + 2, s - 4, s - 4);
+          }
+        });
+      }
       if (ghost.type === 'factory_2x2') {
         const s = this.tileSize;
         ctx.fillStyle = ghost.valid ? 'rgba(201, 182, 228, 0.25)' : 'rgba(232, 160, 160, 0.35)';
@@ -2658,9 +2863,146 @@ export class Renderer {
         }
       }
       this.drawPiece(ctx, ghost);
+      this.drawGhostPortArrows(ctx, ghost);
     }
 
     ctx.restore();
+  }
+
+  // Flechas verdes indicadoras de puertos de entrada y salida en modo Ghost / Preview
+  drawGhostPortArrows(ctx, ghost) {
+    if (!ghost || !ghost.type || ghost.type === 'erase' || ghost.type === 'obstacle' || ghost.type === 'water') return;
+
+    const s = this.tileSize;
+    const dir = ghost.dir || 0;
+    const rightDelta = DIR_DELTA[(dir + 1) % 4];
+
+    // Puertos a dibujar: { x, y, borderDir, isExit }
+    const ports = [];
+
+    switch (ghost.type) {
+      case 'belt':
+      case 'belt_fast':
+      case 'belt_slow':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'extractor':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'trash':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        break;
+
+      case 'cutter':
+        // Entrada en la parte trasera de la celda raíz
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        // Dos salidas frontales paralelas (raíz y parte derecha, idéntico a screenshot)
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x + rightDelta.x, y: ghost.y + rightDelta.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'painter':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'factory_1x1':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'factory_2x2':
+        for (let dx = 0; dx < 2; dx++) {
+          for (let dy = 0; dy < 2; dy++) {
+            if (dir === 0 && dx === 1) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 0, isExit: true });
+            if (dir === 1 && dy === 1) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 1, isExit: true });
+            if (dir === 2 && dx === 0) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 2, isExit: true });
+            if (dir === 3 && dy === 0) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 3, isExit: true });
+
+            if (dir === 0 && dx === 0) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 2, isExit: false });
+            if (dir === 1 && dy === 0) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 3, isExit: false });
+            if (dir === 2 && dx === 1) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 0, isExit: false });
+            if (dir === 3 && dy === 1) ports.push({ x: ghost.x + dx, y: ghost.y + dy, borderDir: 1, isExit: false });
+          }
+        }
+        break;
+
+      case 'splitter':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: true });
+        break;
+
+      case 'merger':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'filter':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: true });
+        break;
+
+      case 'tunnel':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'crossing':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: true });
+        break;
+
+      case 'buffer':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+    }
+
+    const pulse = 1.0 + Math.sin(performance.now() * 0.007) * 0.10;
+
+    for (const p of ports) {
+      const cx = (p.x + 0.5) * s;
+      const cy = (p.y + 0.5) * s;
+      const delta = DIR_DELTA[p.borderDir];
+      const edgeDist = s * 0.44;
+      const px = cx + delta.x * edgeDist;
+      const py = cy + delta.y * edgeDist;
+
+      const pointDir = p.isExit ? p.borderDir : (p.borderDir + 2) % 4;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(pointDir * (Math.PI / 2));
+      ctx.scale(pulse, pulse);
+
+      const arrowSize = s * 0.22;
+      ctx.fillStyle = p.isExit ? '#48C774' : '#52B788';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.8;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      ctx.beginPath();
+      ctx.moveTo(arrowSize * 0.55, 0);
+      ctx.lineTo(-arrowSize * 0.45, -arrowSize * 0.45);
+      ctx.lineTo(-arrowSize * 0.18, 0);
+      ctx.lineTo(-arrowSize * 0.45, arrowSize * 0.45);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   drawItems(ctx, customItems = null) {
@@ -3127,10 +3469,16 @@ export class InputManager {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         const clickedPiece = this.game.grid.get(pos.gridX, pos.gridY);
 
-        // Tocar una fábrica (1x1 o 2x2) abre cómodamente el menú contextual de recetas en móvil y PC
-        if (clickedPiece && (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part')) {
-          if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
-            QuantumDLC.openRecipeSelector(this.game, clickedPiece);
+        // Tocar una fábrica o pintor abre cómodamente el panel lateral/inferior de configuración en móvil y PC
+        if (clickedPiece) {
+          if (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part') {
+            if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
+              this.game.ui.openMachineSidebar(clickedPiece);
+            }
+          } else if (clickedPiece.type === 'painter') {
+            if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
+              this.game.ui.openPainterSidebar(clickedPiece);
+            }
           }
         }
 
@@ -3228,8 +3576,8 @@ export class InputManager {
       return;
     }
 
-    // Teclas 1 a 8 para herramientas estándar
-    const tools = ['belt', 'extractor', 'trash', 'cutter', 'painter', 'mixer', 'tunnel', 'erase'];
+    // Teclas 1 a 8 para herramientas estándar (6 es ahora Fabricador / factory_1x1)
+    const tools = ['belt', 'extractor', 'trash', 'cutter', 'painter', 'factory_1x1', 'tunnel', 'erase'];
     if (e.key >= '1' && e.key <= '8' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
       const idx = parseInt(e.key, 10) - 1;
       if (tools[idx]) {
@@ -3272,14 +3620,25 @@ export class InputManager {
       return;
     }
 
-    // Interacción y cambio de receta (Tecla E) sobre fábricas
+    // Interacción y cambio de receta o color (Tecla E) sobre máquina o pintor con el ratón encima (hover SIN clic)
     if (!e.ctrlKey && !e.metaKey && (e.key === 'e' || e.key === 'E')) {
       if (this.lastHoverGrid) {
         const piece = this.game.grid.get(this.lastHoverGrid.x, this.lastHoverGrid.y);
         if (piece && (piece.type === 'factory_1x1' || piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part')) {
-          QuantumDLC.openRecipeSelector(this.game, piece);
+          this.game.ui.openMachineSidebar(piece);
+          return;
+        } else if (piece && piece.type === 'painter') {
+          this.game.ui.openPainterSidebar(piece);
           return;
         }
+      }
+      // Si el cursor no está sobre una máquina colocada, abrir drawer para el preset activo
+      if (this.game.selectedTool === 'factory_1x1' || this.game.selectedTool === 'factory_2x2') {
+        this.game.ui.openMachineSidebar(null);
+        return;
+      } else if (this.game.selectedTool === 'painter') {
+        this.game.ui.openPainterSidebar(null);
+        return;
       }
     }
 
@@ -3309,7 +3668,11 @@ export class InputManager {
         this.game.rotatePlacement();
         break;
       case 'escape':
-        this.game.ui.toggleLevelsModal();
+        if (this.game.ui?.isSidebarOpen?.()) {
+          this.game.ui.closeMachineSidebar();
+        } else {
+          this.game.ui.toggleLevelsModal();
+        }
         break;
       case '+':
       case '=':
@@ -3481,13 +3844,17 @@ export class UIManager {
       this.updateAvailableTools(this.game.currentLevel?.availableTools || ['belt', 'extractor']);
     });
 
-    // Botón flotante para inspección y cambio de recetas de máquinas (Tecla E / Móvil)
+    // Botón flotante para inspección y configuración de máquinas (Tecla E / Móvil)
     document.getElementById('btn-fab-recipe')?.addEventListener('click', () => {
       const factories = this.game.grid.getAllPieces().filter(p => p.type === 'factory_1x1' || p.type === 'factory_2x2');
       if (factories.length > 0) {
-        QuantumDLC.openRecipeSelector(this.game, factories[0]);
+        this.openMachineSidebar(factories[0]);
+      } else if (this.game.selectedTool === 'factory_1x1' || this.game.selectedTool === 'factory_2x2') {
+        this.openMachineSidebar(null);
+      } else if (this.game.selectedTool === 'painter') {
+        this.openPainterSidebar(null);
       } else {
-        this.showToast("Coloca primero una Fábrica 1x1 o Mega Ensambladora 2x2", 2200);
+        this.openMachineSidebar(null);
       }
     });
 
@@ -3667,6 +4034,23 @@ export class UIManager {
         this.game.updateGhost();
       });
     });
+
+    // Selector de presets de receta para el Fabricador (Panel inferior)
+    const recipeChips = document.querySelectorAll('.recipe-chip[data-recipe]');
+    recipeChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        recipeChips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        const recipe = chip.dataset.recipe;
+        this.game.defaultFactoryRecipe = recipe;
+        this.game.audio?.playRotate?.();
+        this.showToast(`Preset fábrica: ${recipe.replace(/_/g, ' ')}`, 1400);
+      });
+    });
+
+    document.getElementById('btn-close-sidebar')?.addEventListener('click', () => {
+      this.closeMachineSidebar();
+    });
   }
 
   updateLevelInfo(level, demands = null) {
@@ -3806,10 +4190,23 @@ export class UIManager {
     });
 
     const colorBar = document.getElementById('painter-color-bar');
-    if (this.game.selectedTool === 'painter' && tools.includes('painter')) {
-      colorBar.classList.add('visible');
-    } else {
-      colorBar.classList.remove('visible');
+    if (colorBar) {
+      if (this.game.selectedTool === 'painter' && tools.includes('painter')) {
+        colorBar.classList.add('visible');
+      } else {
+        colorBar.classList.remove('visible');
+      }
+    }
+
+    const recipeBar = document.getElementById('factory-recipe-bar');
+    if (recipeBar) {
+      const isFactoryActive = (this.game.selectedTool === 'factory_1x1' || this.game.selectedTool === 'factory_2x2');
+      const isFactoryAvailable = tools.includes('factory_1x1') || tools.includes('factory_2x2') || QuantumDLC.isEnabled;
+      if (isFactoryActive && isFactoryAvailable) {
+        recipeBar.classList.add('visible');
+      } else {
+        recipeBar.classList.remove('visible');
+      }
     }
   }
 
@@ -3824,17 +4221,31 @@ export class UIManager {
     });
 
     const eraseFab = document.getElementById('btn-fab-erase');
-    if (tool === 'erase') {
-      eraseFab.classList.add('active');
-    } else {
-      eraseFab.classList.remove('active');
+    if (eraseFab) {
+      if (tool === 'erase') {
+        eraseFab.classList.add('active');
+      } else {
+        eraseFab.classList.remove('active');
+      }
     }
 
     const colorBar = document.getElementById('painter-color-bar');
-    if (tool === 'painter') {
-      colorBar.classList.add('visible');
-    } else {
-      colorBar.classList.remove('visible');
+    if (colorBar) {
+      if (tool === 'painter') {
+        colorBar.classList.add('visible');
+      } else {
+        colorBar.classList.remove('visible');
+      }
+    }
+
+    const recipeBar = document.getElementById('factory-recipe-bar');
+    if (recipeBar) {
+      if (tool === 'factory_1x1' || tool === 'factory_2x2') {
+        recipeBar.classList.add('visible');
+        this.syncFactoryRecipeChips(this.game.defaultFactoryRecipe || 'combine_shapes');
+      } else {
+        recipeBar.classList.remove('visible');
+      }
     }
   }
 
@@ -3965,6 +4376,224 @@ export class UIManager {
     } else {
       modal.classList.remove('active');
     }
+  }
+
+  openMachineSidebar(piece = null) {
+    const sidebar = document.getElementById('machine-config-sidebar');
+    if (!sidebar) return;
+
+    // Si es una pieza 2x2 esclava, encontrar la raíz
+    let target = piece;
+    if (piece && piece.type === 'factory_2x2_part') {
+      target = QuantumDLC.getRootPiece(this.game.grid, piece.x, piece.y);
+    }
+
+    const is2x2 = target ? target.type === 'factory_2x2' : this.game.selectedTool === 'factory_2x2';
+    const currentRecipeId = target ? (target.recipeId || (is2x2 ? 'quantum_sugar_cube' : this.game.defaultFactoryRecipe || 'combine_shapes')) : (this.game.defaultFactoryRecipe || 'combine_shapes');
+
+    const iconEl = document.getElementById('sidebar-icon');
+    const titleEl = document.getElementById('sidebar-title');
+    const subtitleEl = document.getElementById('sidebar-subtitle');
+    const bodyEl = document.getElementById('sidebar-content');
+    const presetBtn = document.getElementById('btn-sidebar-set-preset');
+
+    if (iconEl) iconEl.textContent = is2x2 ? '⚛️' : '⚙️';
+    if (titleEl) titleEl.textContent = is2x2 ? 'Mega Ensambladora (2x2)' : 'Fabricador (1x1)';
+    if (subtitleEl) {
+      subtitleEl.textContent = target ? `Casilla (${target.x}, ${target.y})` : 'Configuración de Nuevas Máquinas';
+    }
+
+    if (presetBtn) {
+      presetBtn.style.display = 'block';
+      presetBtn.textContent = '⭐ Aplicar como Preset por Defecto';
+      presetBtn.onclick = () => {
+        this.game.defaultFactoryRecipe = target ? target.recipeId : currentRecipeId;
+        this.syncFactoryRecipeChips(this.game.defaultFactoryRecipe);
+        this.showToast(`Preset establecido a "${this.game.defaultFactoryRecipe.replace(/_/g, ' ')}"`, 1800);
+      };
+    }
+
+    const available = QuantumDLC.getAvailableRecipes(is2x2 ? 'factory_2x2' : 'factory_1x1');
+
+    let html = `
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        Selecciona la receta de producción. Los ingredientes incompatibles se purgarán automáticamente:
+      </div>
+      <div class="sidebar-recipe-list" style="display: flex; flex-direction: column; gap: 8px;">
+    `;
+
+    for (const recipe of available) {
+      const isSelected = currentRecipeId === recipe.id;
+      const outDef = DLC_ITEMS[recipe.output] || {};
+      const inputsText = Object.entries(recipe.inputs).map(([itemId, count]) => {
+        const itemDef = DLC_ITEMS[itemId] || {};
+        return `${count}x ${itemDef.icon || ''} ${itemDef.name || itemId}`;
+      }).join(' + ');
+
+      html += `
+        <div class="sidebar-recipe-card ${isSelected ? 'active' : ''}" data-recipe="${recipe.id}" style="
+          padding: 10px 12px;
+          border-radius: 8px;
+          border: 1.5px solid ${isSelected ? 'var(--pastel-mint, #A8D5BA)' : 'var(--border-color, #E5E9F0)'};
+          background: ${isSelected ? 'rgba(168, 213, 186, 0.15)' : 'var(--surface-color, #FFFFFF)'};
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: all 0.2s ease;
+        ">
+          <div style="font-size: 24px; min-width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: var(--bg-color, #F4F6F9); border-radius: 6px;">
+            ${outDef.icon || '🔷'}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="font-size: 13px; color: var(--text-bright);">${recipe.name}</strong>
+              <span class="mono" style="font-size: 11px; color: var(--text-muted);">⏱️ ${recipe.time}s</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${inputsText}
+            </div>
+          </div>
+          <div style="font-size: 16px; color: ${isSelected ? 'var(--pastel-mint, #A8D5BA)' : 'transparent'};">
+            ✓
+          </div>
+        </div>
+      `;
+    }
+    html += '</div>';
+
+    if (bodyEl) {
+      bodyEl.innerHTML = html;
+      const cards = bodyEl.querySelectorAll('.sidebar-recipe-card');
+      cards.forEach(c => {
+        c.addEventListener('click', () => {
+          const recipeId = c.dataset.recipe;
+          if (target) {
+            QuantumDLC.setRecipe(this.game, target, recipeId);
+          }
+          this.game.defaultFactoryRecipe = recipeId;
+          this.syncFactoryRecipeChips(recipeId);
+          this.game.audio?.playRotate?.();
+          this.openMachineSidebar(target);
+        });
+      });
+    }
+
+    sidebar.classList.add('open');
+    sidebar.setAttribute('aria-hidden', 'false');
+  }
+
+  openPainterSidebar(piece = null) {
+    const sidebar = document.getElementById('machine-config-sidebar');
+    if (!sidebar) return;
+
+    const currentColor = piece ? (piece.color || 'lavender') : (this.game.painterColor || 'lavender');
+
+    const iconEl = document.getElementById('sidebar-icon');
+    const titleEl = document.getElementById('sidebar-title');
+    const subtitleEl = document.getElementById('sidebar-subtitle');
+    const bodyEl = document.getElementById('sidebar-content');
+    const presetBtn = document.getElementById('btn-sidebar-set-preset');
+
+    if (iconEl) iconEl.textContent = '🎨';
+    if (titleEl) titleEl.textContent = 'Pintor';
+    if (subtitleEl) {
+      subtitleEl.textContent = piece ? `Casilla (${piece.x}, ${piece.y})` : 'Color para Nuevos Pintores';
+    }
+
+    if (presetBtn) {
+      presetBtn.style.display = 'block';
+      presetBtn.textContent = '⭐ Guardar como Color por Defecto';
+      presetBtn.onclick = () => {
+        this.game.painterColor = piece ? piece.color : currentColor;
+        this.syncPainterColorSwatches(this.game.painterColor);
+        this.showToast(`Color por defecto: ${this.game.painterColor}`, 1800);
+      };
+    }
+
+    const colors = [
+      { id: 'lavender', name: 'Lavanda', hex: '#C9B6E4' },
+      { id: 'mint', name: 'Menta', hex: '#A8D5BA' },
+      { id: 'coral', name: 'Coral', hex: '#E8A0A0' },
+      { id: 'azure', name: 'Celeste', hex: '#A9CCE3' },
+      { id: 'lemon', name: 'Limón', hex: '#F9E79F' }
+    ];
+
+    let html = `
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        Selecciona el color de pigmento con el que este pintor teñirá las piezas:
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+    `;
+
+    for (const c of colors) {
+      const isSelected = currentColor === c.id;
+      html += `
+        <div class="sidebar-color-card ${isSelected ? 'active' : ''}" data-color="${c.id}" style="
+          padding: 12px;
+          border-radius: 8px;
+          border: 2px solid ${isSelected ? c.hex : 'var(--border-color, #E5E9F0)'};
+          background: ${isSelected ? `${c.hex}22` : 'var(--surface-color, #FFFFFF)'};
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: all 0.2s ease;
+        ">
+          <div style="width: 24px; height: 24px; border-radius: 50%; background: ${c.hex}; border: 1.5px solid rgba(0,0,0,0.15);"></div>
+          <span style="font-size: 13px; font-weight: 600; color: var(--text-bright); flex: 1;">${c.name}</span>
+          ${isSelected ? `<span style="color: ${c.hex}; font-weight: bold;">✓</span>` : ''}
+        </div>
+      `;
+    }
+    html += '</div>';
+
+    if (bodyEl) {
+      bodyEl.innerHTML = html;
+      const cards = bodyEl.querySelectorAll('.sidebar-color-card');
+      cards.forEach(card => {
+        card.addEventListener('click', () => {
+          const color = card.dataset.color;
+          if (piece) {
+            piece.color = color;
+          }
+          this.game.painterColor = color;
+          this.syncPainterColorSwatches(color);
+          this.game.audio?.playTone?.(620, 'sine', 0.08, 0.03);
+          this.openPainterSidebar(piece);
+        });
+      });
+    }
+
+    sidebar.classList.add('open');
+    sidebar.setAttribute('aria-hidden', 'false');
+  }
+
+  closeMachineSidebar() {
+    const sidebar = document.getElementById('machine-config-sidebar');
+    if (sidebar) {
+      sidebar.classList.remove('open');
+      sidebar.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  isSidebarOpen() {
+    const sidebar = document.getElementById('machine-config-sidebar');
+    return sidebar ? sidebar.classList.contains('open') : false;
+  }
+
+  syncFactoryRecipeChips(recipeId) {
+    const chips = document.querySelectorAll('.recipe-chip[data-recipe]');
+    chips.forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.recipe === recipeId);
+    });
+  }
+
+  syncPainterColorSwatches(color) {
+    const swatches = document.querySelectorAll('.color-swatch[data-color]');
+    swatches.forEach(swatch => {
+      swatch.classList.toggle('active', swatch.dataset.color === color);
+    });
   }
 
   populateHackerGrid() {
@@ -4375,6 +5004,7 @@ export class BeltFlowGame {
     this.selectedTool = 'belt';
     this.placementDir = DIR.RIGHT;
     this.painterColor = PASTEL_COLORS.MINT;
+    this.defaultFactoryRecipe = 'combine_shapes';
     this.mode = 'edit'; // 'edit' (Edición) o 'view' (Vista)
 
     // Pilas de Deshacer / Rehacer y Modo Zen
@@ -4646,6 +5276,10 @@ export class BeltFlowGame {
       if (piece) piece.dir = action.prevDir;
     } else if (action.type === 'place_2x2') {
       QuantumDLC.removeFactory2x2(this.grid, action.x, action.y);
+    } else if (action.type === 'place_cutter') {
+      const rVec = DIR_DELTA[(action.dir + 1) % 4];
+      this.grid.cells.delete(this.grid.key(action.x, action.y));
+      this.grid.cells.delete(this.grid.key(action.x + rVec.x, action.y + rVec.y));
     } else if (action.type === 'clear') {
       if (action.pieces) {
         action.pieces.forEach(p => this.grid.set(p.x, p.y, { ...p }));
@@ -4669,6 +5303,10 @@ export class BeltFlowGame {
       this.grid.set(action.x, action.y, { ...action.newPiece });
     } else if (action.type === 'place_2x2') {
       QuantumDLC.placeFactory2x2(this.grid, action.x, action.y, action.dir);
+    } else if (action.type === 'place_cutter') {
+      const rVec = DIR_DELTA[(action.dir + 1) % 4];
+      this.grid.set(action.x, action.y, { x: action.x, y: action.y, type: 'cutter', dir: action.dir, rootX: action.x, rootY: action.y, fixed: false });
+      this.grid.set(action.x + rVec.x, action.y + rVec.y, { x: action.x + rVec.x, y: action.y + rVec.y, type: 'cutter_part', dir: action.dir, rootX: action.x, rootY: action.y, fixed: false });
     } else if (action.type === 'remove') {
       this.grid.remove(action.x, action.y);
     } else if (action.type === 'rotate') {
@@ -4803,6 +5441,17 @@ export class BeltFlowGame {
       const mine = this.grid.getMine(gridX, gridY);
       valid = !!mine && (!existing || !existing.fixed);
       ghostShape = mine ? Shapes.clone(mine.shape) : null;
+    }
+
+    if (this.selectedTool === 'cutter') {
+      const rVec = DIR_DELTA[(this.placementDir + 1) % 4];
+      const secX = gridX + rVec.x;
+      const secY = gridY + rVec.y;
+      const inBounds = this.grid.inBounds(gridX, gridY) && this.grid.inBounds(secX, secY);
+      const secExisting = this.grid.get(secX, secY);
+      const rootOk = !existing || (!existing.fixed && existing.type !== 'obstacle' && existing.type !== 'rock' && existing.type !== 'water');
+      const secOk = !secExisting || (!secExisting.fixed && secExisting.type !== 'obstacle' && secExisting.type !== 'rock' && secExisting.type !== 'water');
+      valid = inBounds && rootOk && secOk;
     }
 
     if (this.selectedTool === 'factory_2x2') {
@@ -5045,14 +5694,76 @@ export class BeltFlowGame {
       return;
     }
 
-    // Fábrica Estándar (1x1) del DLC
+    // Cortadora de 2 Bloques (Cutter 2x1)
+    if (this.selectedTool === 'cutter') {
+      const rVec = DIR_DELTA[(this.placementDir + 1) % 4];
+      const secX = x + rVec.x;
+      const secY = y + rVec.y;
+
+      if (!this.grid.inBounds(x, y) || !this.grid.inBounds(secX, secY)) {
+        this.audio.playError();
+        this.ui.showToast("⚠️ Espacio insuficiente para la cortadora (2 bloques)", 1800);
+        return;
+      }
+      const secPiece = this.grid.get(secX, secY);
+      if ((existing && existing.fixed) || (secPiece && secPiece.fixed) ||
+          (existing && (existing.type === 'obstacle' || existing.type === 'rock' || existing.type === 'water')) ||
+          (secPiece && (secPiece.type === 'obstacle' || secPiece.type === 'rock' || secPiece.type === 'water'))) {
+        this.audio.playError();
+        this.ui.showToast("⚠️ Casilla ocupada o bloqueada", 1800);
+        return;
+      }
+
+      if (existing) this.grid.remove(x, y);
+      if (secPiece) this.grid.remove(secX, secY);
+
+      const rootPiece = {
+        x: x,
+        y: y,
+        type: 'cutter',
+        dir: this.placementDir,
+        rootX: x,
+        rootY: y,
+        fixed: false
+      };
+      const partPiece = {
+        x: secX,
+        y: secY,
+        type: 'cutter_part',
+        dir: this.placementDir,
+        rootX: x,
+        rootY: y,
+        fixed: false
+      };
+
+      this.grid.set(x, y, rootPiece);
+      this.grid.set(secX, secY, partPiece);
+
+      this.recordAction({
+        type: 'place_cutter',
+        x, y,
+        secX, secY,
+        dir: this.placementDir
+      });
+
+      this.renderer.addPlacementEffect(x, y, 'cutter');
+      this.renderer.addPlacementEffect(secX, secY, 'cutter');
+      this.audio.playPlaf();
+      this.updateBudgetHUD();
+      this.updateGhost(x, y);
+      this.checkAchievements();
+      return;
+    }
+
+    // Fabricador Estándar (1x1)
     if (this.selectedTool === 'factory_1x1') {
+      const recipeToUse = this.defaultFactoryRecipe || 'combine_shapes';
       const newPiece = {
         x: x,
         y: y,
         type: 'factory_1x1',
         dir: this.placementDir,
-        recipeId: 'sugar_cube',
+        recipeId: recipeToUse,
         buffer: {},
         isCrafting: false,
         progress: 0.0,
@@ -5073,14 +5784,16 @@ export class BeltFlowGame {
       return;
     }
 
-    // Mega Ensambladora (2x2) del DLC
+    // Mega Ensambladora (2x2)
     if (this.selectedTool === 'factory_2x2') {
       if (!QuantumDLC.canPlaceFactory2x2(this.grid, x, y)) {
         this.audio.playError();
         this.ui.showToast("⚠️ Espacio de 2x2 insuficiente o bloqueado", 1800);
         return;
       }
-      const rootPiece = QuantumDLC.placeFactory2x2(this.grid, x, y, this.placementDir, 'quantum_sugar_cube');
+      const recipeToUse = (this.defaultFactoryRecipe === 'quantum_sugar_cube' || this.defaultFactoryRecipe === 'refined_sugar_cube')
+        ? this.defaultFactoryRecipe : 'quantum_sugar_cube';
+      const rootPiece = QuantumDLC.placeFactory2x2(this.grid, x, y, this.placementDir, recipeToUse);
       if (rootPiece) {
         this.recordAction({
           type: 'place_2x2',
@@ -5599,6 +6312,8 @@ export class BeltFlowGame {
 }
 
 // Iniciar juego cuando el DOM esté listo
-window.addEventListener('DOMContentLoaded', () => {
-  window.beltFlowGame = new BeltFlowGame();
-});
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    window.beltFlowGame = new BeltFlowGame();
+  });
+}
