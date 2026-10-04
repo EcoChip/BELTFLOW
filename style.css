@@ -667,10 +667,15 @@ button:focus-visible {
   transform: translateX(105%);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
+  pointer-events: none;
+  visibility: hidden;
 }
 
+.machine-config-sidebar.open,
 .machine-config-sidebar.visible {
   transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .sidebar-header {
@@ -874,9 +879,14 @@ button:focus-visible {
     transform: translateY(105%);
     box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.25);
     padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    pointer-events: none;
+    visibility: hidden;
   }
+  .machine-config-sidebar.open,
   .machine-config-sidebar.visible {
     transform: translateY(0);
+    pointer-events: auto;
+    visibility: visible;
   }
 }
 
@@ -1803,10 +1813,16 @@ input:checked + .toggle-slider::before {
   position: fixed;
   inset: 0;
   z-index: 85;
-  display: flex;
+  display: none;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.main-menu-screen.open,
+.main-menu-screen.visible {
+  display: flex;
+  pointer-events: auto;
 }
 
 .main-menu-screen.closing,
@@ -1815,6 +1831,7 @@ input:checked + .toggle-slider::before {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+  display: none;
 }
 
 .menu-sidebar {
@@ -1949,7 +1966,8 @@ input:checked + .toggle-slider::before {
   align-items: flex-end;
   justify-content: flex-end;
   padding: 24px;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .preview-hint-pill {

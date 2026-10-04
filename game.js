@@ -3255,7 +3255,10 @@ export class InputManager {
   }
 
   onPointerDown(e) {
-    if (this.game && this.game.state === 'menu') return;
+    if (this.game && this.game.state === 'menu') {
+      this.game.startGameFromMenu();
+      return;
+    }
 
     this.canvas.setPointerCapture(e.pointerId);
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -3459,7 +3462,10 @@ export class InputManager {
 
     this.canvas.classList.remove('grabbing');
 
-    if (this.game && this.game.state === 'menu') return;
+    if (this.game && this.game.state === 'menu') {
+      this.game.startGameFromMenu();
+      return;
+    }
 
     if (this.activePointers.size === 0) {
       const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
@@ -3469,27 +3475,25 @@ export class InputManager {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         const clickedPiece = this.game.grid.get(pos.gridX, pos.gridY);
 
-        // Tocar una fábrica o pintor abre cómodamente el panel lateral/inferior de configuración en móvil y PC
-        if (clickedPiece) {
-          if (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part') {
-            if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
+        if (this.game.mode === 'view') {
+          // En modo vista, tocar abre la configuración de la máquina
+          if (clickedPiece) {
+            if (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part') {
               this.game.ui.openMachineSidebar(clickedPiece);
-            }
-          } else if (clickedPiece.type === 'painter') {
-            if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
+            } else if (clickedPiece.type === 'painter') {
               this.game.ui.openPainterSidebar(clickedPiece);
             }
           }
-        }
-
-        if (this.game.mode === 'edit' && e.pointerType === 'touch') {
+        } else if (this.game.mode === 'edit' && e.pointerType === 'touch') {
+          // En modo edición táctil: colocar o borrar piezas
           if (this.game.selectedTool === 'erase') {
             this.game.removePieceAt(pos.gridX, pos.gridY);
           } else if (this.game.selectedTool === 'belt') {
             if (!this.lastPlacedCell) {
               this.game.handleBeltPlacement(pos.gridX, pos.gridY);
             }
-          } else if (this.game.selectedTool !== 'factory_1x1' && this.game.selectedTool !== 'factory_2x2') {
+          } else {
+            // Permitir colocar todas las herramientas en táctil
             this.game.placePieceAt(pos.gridX, pos.gridY);
           }
         }
@@ -3736,6 +3740,11 @@ export class UIManager {
 
     document.getElementById('menu-btn-continue')?.addEventListener('click', () => {
       this.game.audio.playPlaf();
+      this.game.startGameFromMenu();
+    });
+
+    document.querySelector('.menu-preview-overlay')?.addEventListener('click', () => {
+      this.game.audio?.playPlaf?.();
       this.game.startGameFromMenu();
     });
 
@@ -4479,7 +4488,7 @@ export class UIManager {
       });
     }
 
-    sidebar.classList.add('open');
+    sidebar.classList.add('open', 'visible');
     sidebar.setAttribute('aria-hidden', 'false');
   }
 
@@ -4565,21 +4574,21 @@ export class UIManager {
       });
     }
 
-    sidebar.classList.add('open');
+    sidebar.classList.add('open', 'visible');
     sidebar.setAttribute('aria-hidden', 'false');
   }
 
   closeMachineSidebar() {
     const sidebar = document.getElementById('machine-config-sidebar');
     if (sidebar) {
-      sidebar.classList.remove('open');
+      sidebar.classList.remove('open', 'visible');
       sidebar.setAttribute('aria-hidden', 'true');
     }
   }
 
   isSidebarOpen() {
     const sidebar = document.getElementById('machine-config-sidebar');
-    return sidebar ? sidebar.classList.contains('open') : false;
+    return sidebar ? (sidebar.classList.contains('open') || sidebar.classList.contains('visible')) : false;
   }
 
   syncFactoryRecipeChips(recipeId) {
@@ -4988,8 +4997,8 @@ export class BeltFlowGame {
     this.deliveredCount = 0;
     this.timeElapsed = 0;
 
-    // Estado de juego: 'menu' (Menú split-screen con screensaver) o 'playing'
-    this.state = 'menu';
+    // Estado de juego: 'playing' directamente para interactuar de inmediato
+    this.state = 'playing';
 
     // Sistema de vidas, racha y estadísticas
     this.lives = 5;
@@ -5071,17 +5080,17 @@ export class BeltFlowGame {
   }
 
   startGameFromMenu() {
+    this.state = 'playing';
     const menuScreen = document.getElementById('main-menu-screen');
     if (menuScreen) {
+      menuScreen.classList.remove('open', 'visible');
       menuScreen.classList.add('closing');
       setTimeout(() => {
         menuScreen.style.display = 'none';
         menuScreen.classList.remove('closing');
-        this.state = 'playing';
         this.centerCameraOnLevel();
-      }, 460);
+      }, 150);
     } else {
-      this.state = 'playing';
       this.centerCameraOnLevel();
     }
   }
@@ -5092,6 +5101,7 @@ export class BeltFlowGame {
     if (menuScreen) {
       menuScreen.style.display = 'flex';
       menuScreen.classList.remove('closing');
+      menuScreen.classList.add('open', 'visible');
       this.ui.updateMenuStats();
     }
   }
@@ -6311,9 +6321,17 @@ export class BeltFlowGame {
   }
 }
 
-// Iniciar juego cuando el DOM esté listo
-if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
+// Iniciar juego cuando el DOM esté listo o de inmediato si ya fue cargado
+function initBeltFlow() {
+  if (typeof window !== 'undefined' && !window.beltFlowGame) {
     window.beltFlowGame = new BeltFlowGame();
-  });
+  }
+}
+
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initBeltFlow);
+  } else {
+    initBeltFlow();
+  }
 }
