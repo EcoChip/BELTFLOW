@@ -1447,6 +1447,94 @@ export const LEVELS = [
       { x: 19, y: 11, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 },
       { x: 19, y: 17, type: 'delivery', dir: 2, fixed: true, secondary: true, deliveryIndex: 2 }
     ]
+  },
+
+  // ==========================================================================
+  // CAPÍTULO 4: EXPANSIÓN BIOMOLECULAR & CUÁNTICA (Niveles 61–64)
+  // ==========================================================================
+
+  // Nivel 61: Cosecha de Sacarosa (Tutorial Fábrica 1x1 y Yacimientos de Azúcar)
+  {
+    id: 61,
+    chapter: 4,
+    name: "Cosecha de Sacarosa",
+    description: "Extrae cristales de la mena de azúcar y procésalos en la Fábrica Estándar (1x1) para producir Terrones de Azúcar.",
+    hint: "Coloca un Extractor (2) sobre la Mena de Azúcar, conéctalo a la Fábrica 1x1 (P) y traza la cinta hacia la salida.",
+    hasLives: false,
+    timeLimit: 220,
+    quota: 6,
+    stars: { gold: 60, silver: 100, bronze: 160 },
+    targetShape: { dlcItem: 'sugar_cube' },
+    availableTools: ['belt', 'extractor', 'factory_1x1', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY],
+    fixedGrid: [
+      { x: 4, y: 8, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 16, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 62: Síntesis de Proteínas (Múltiples ingredientes en Fábrica 1x1)
+  {
+    id: 62,
+    chapter: 4,
+    name: "Síntesis de Proteínas",
+    description: "Combina 2x Proteína Pura + 1x Cristal de Azúcar en una Fábrica 1x1 configurada con la receta 'Barra de Proteína'.",
+    hint: "Coloca el cursor sobre la Fábrica 1x1 y pulsa 'E' (o toca RECETA en móvil) para cambiar la receta a 'Barra de Proteína'.",
+    hasLives: false,
+    timeLimit: 240,
+    quota: 6,
+    stars: { gold: 75, silver: 120, bronze: 180 },
+    targetShape: { dlcItem: 'protein_bar' },
+    availableTools: ['belt', 'extractor', 'factory_1x1', 'splitter', 'merger', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL],
+    fixedGrid: [
+      { x: 4, y: 5, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 4, y: 11, type: 'mine', resourceType: 'protein_deposit', dir: 0, shape: { dlcItem: 'raw_protein' }, fixed: true },
+      { x: 17, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 63: Ultra-Presión Cristalina (Cadena de procesamiento Nivel 3)
+  {
+    id: 63,
+    chapter: 4,
+    name: "Ultra-Presión Cristalina",
+    description: "Somete los Terrones de Azúcar a alta presión en una segunda fábrica para obtener Terrones Procesados.",
+    hint: "Diseña dos etapas: Fábrica 1 elabora Terrones de Azúcar; Fábrica 2 (receta Terrón Procesado) comprime 2x Terrones.",
+    hasLives: false,
+    timeLimit: 260,
+    quota: 6,
+    stars: { gold: 90, silver: 140, bronze: 200 },
+    targetShape: { dlcItem: 'refined_sugar_cube' },
+    availableTools: ['belt', 'extractor', 'factory_1x1', 'splitter', 'merger', 'crossing', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER],
+    fixedGrid: [
+      { x: 4, y: 5, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 4, y: 11, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 19, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 64: El Terrón Cuántico (Endgame / Mega Ensambladora 2x2)
+  {
+    id: 64,
+    chapter: 4,
+    name: "El Terrón Cuántico",
+    description: "El reto supremo: Construye la Mega Ensambladora (2x2) y alimenta 4x Terrones Procesados + 2x Barras de Proteína + 4x Partículas Subatómicas.",
+    hint: "La Mega Ensambladora 2x2 admite múltiples entradas perimetrales. Conecta las tres líneas de producción hacia ella.",
+    hasLives: false,
+    timeLimit: null, // Sandbox relajado para el reto supremo
+    quota: 3,
+    stars: { gold: 120, silver: 190, bronze: 280 },
+    targetShape: { dlcItem: 'quantum_sugar_cube' },
+    availableTools: ['belt', 'belt_fast', 'belt_slow', 'extractor', 'factory_1x1', 'factory_2x2', 'splitter', 'merger', 'crossing', 'tunnel', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL, PASTEL_COLORS.LAVENDER],
+    fixedGrid: [
+      { x: 3, y: 4, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 3, y: 10, type: 'mine', resourceType: 'protein_deposit', dir: 0, shape: { dlcItem: 'raw_protein' }, fixed: true },
+      { x: 3, y: 16, type: 'mine', resourceType: 'quantum_anomaly', dir: 0, shape: { dlcItem: 'subatomic_particle' }, fixed: true },
+      { x: 23, y: 10, type: 'delivery', dir: 2, fixed: true }
+    ]
   }
 ];
 
@@ -1480,6 +1568,15 @@ export const BIOMES = {
     particleType: 'fireflies',
     themeColor: '#C9B6E4',
     description: "Tonos lavanda y cuarzo, destellos de luciérnagas y maquinaria armónica."
+  },
+  4: {
+    id: 'cuantico',
+    chapter: 4,
+    name: "Laboratorio Biomolecular & Cuántico",
+    levels: "61–64",
+    particleType: 'quantum',
+    themeColor: '#AF7AC5',
+    description: "Vórtices cuánticos lavanda, síntesis de sacarosa y resonancia subatómica."
   }
 };
 
@@ -1503,6 +1600,9 @@ export const ACHIEVEMENTS = [
   { id: 'chapter_1', icon: '🌿', name: "Graduado del Invernadero", desc: "Completa el Capítulo 1 (Nivel 20)." },
   { id: 'chapter_2', icon: '❄️', name: "Maestro Zen", desc: "Completa el Capítulo 2 (Nivel 40)." },
   { id: 'chapter_3', icon: '🌌', name: "Gran Ingeniero Universal", desc: "Completa el Capítulo 3 (Nivel 60)." },
+  { id: 'chapter_4', icon: '🔮', name: "Erudito Cuántico", desc: "Supera los niveles de la Expansión Biomolecular & Cuántica." },
+  { id: 'first_sugar_cube', icon: '🧊', name: "Dulzura Pura", desc: "Sintetiza tu primer Terrón de Azúcar en una Fábrica 1x1." },
+  { id: 'quantum_master', icon: '⚛️', name: "Resonancia Endgame", desc: "Sintetiza un Terrón Cuántico en la Mega Ensambladora 2x2." },
   { id: 'splitter_pro', icon: '🔀', name: "División Justa", desc: "Entrega 50 piezas divididas equitativamente." },
   { id: 'crossing_ace', icon: '➕', name: "Cruce Sin Accidentes", desc: "Transporta 100 piezas a través de cruces." },
   { id: 'filter_master', icon: '🎯', name: "Clasificador Supremo", desc: "Filtra 50 piezas usando selectores." },

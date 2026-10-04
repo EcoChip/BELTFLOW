@@ -15,6 +15,7 @@
  */
 
 import { LEVELS, SHAPE_TYPES, PASTEL_COLORS, COLOR_HEX, createShape, BIOMES, ACHIEVEMENTS, COSMETIC_SKINS } from './levels.js';
+import { QuantumDLC, RESOURCE_NODES, DLC_ITEMS, RECIPES } from './dlc_quantum.js';
 
 /* ==========================================================================
    1. GESTOR DE GUARDADO (SaveManager)
@@ -366,6 +367,11 @@ export class Shapes {
     if (!a && !b) return true;
     if (!a || !b) return false;
 
+    // Soporte para ítems del DLC Biomolecular & Cuántico
+    if (a.dlcItem || b.dlcItem) {
+      return a.dlcItem === b.dlcItem;
+    }
+
     // Si ambos son formas de media pieza (solo tienen una de las dos mitades)
     const aIsHalf = (a.left && !a.right) || (!a.left && a.right);
     const bIsHalf = (b.left && !b.right) || (!b.left && b.right);
@@ -390,6 +396,7 @@ export class Shapes {
 
   static clone(shape) {
     if (!shape) return null;
+    if (shape.dlcItem) return { dlcItem: shape.dlcItem };
     return {
       left: shape.left ? { type: shape.left.type, color: shape.left.color } : null,
       right: shape.right ? { type: shape.right.type, color: shape.right.color } : null
@@ -398,6 +405,7 @@ export class Shapes {
 
   static cut(shape) {
     if (!shape) return { leftHalf: null, rightHalf: null };
+    if (shape.dlcItem) return { leftHalf: null, rightHalf: null };
     const leftHalf = shape.left ? { left: { ...shape.left }, right: null } : null;
     const rightHalf = shape.right ? { left: null, right: { ...shape.right } } : null;
     return { leftHalf, rightHalf };
@@ -405,6 +413,7 @@ export class Shapes {
 
   static paint(shape, newColor) {
     if (!shape) return null;
+    if (shape.dlcItem) return Shapes.clone(shape);
     const painted = Shapes.clone(shape);
     if (painted.left) painted.left.color = newColor;
     if (painted.right) painted.right.color = newColor;
@@ -415,6 +424,7 @@ export class Shapes {
     if (!shapeA && !shapeB) return null;
     if (!shapeA) return Shapes.clone(shapeB);
     if (!shapeB) return Shapes.clone(shapeA);
+    if (shapeA.dlcItem || shapeB.dlcItem) return Shapes.clone(shapeA.dlcItem ? shapeA : shapeB);
 
     // Determinar la mitad izquierda preferente de shapeA
     const leftPart = shapeA.left ? { ...shapeA.left } : (shapeB.left ? { ...shapeB.left } : (shapeA.right ? { ...shapeA.right } : null));
@@ -428,7 +438,15 @@ export class Shapes {
   }
 
   static draw(ctx, shape, size = 20, isDark = false) {
-    if (!shape || (!shape.left && !shape.right)) return;
+    if (!shape) return;
+
+    // Delegación directa y limpia a QuantumDLC si es un ítem de la expansión
+    if (shape.dlcItem) {
+      QuantumDLC.drawItem(ctx, shape.dlcItem, size, isDark);
+      return;
+    }
+
+    if (!shape.left && !shape.right) return;
 
     ctx.save();
 
@@ -609,6 +627,9 @@ export class Grid {
   remove(x, y) {
     const piece = this.get(x, y);
     if (piece && piece.fixed) return false;
+    if (piece && (piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part')) {
+      return QuantumDLC.removeFactory2x2(this, x, y);
+    }
     this.cells.delete(this.key(x, y));
     return true;
   }
@@ -1162,6 +1183,11 @@ export class Simulation {
         }
       }
     }
+
+    // 3. Simulación de la Expansión Biomolecular & Cuántica (Fábrica 1x1 y Mega Ensambladora 2x2)
+    if (QuantumDLC.isEnabled) {
+      QuantumDLC.updateSimulation(this, dt, speedMult);
+    }
   }
 
   canAcceptItem(piece, incomingDir) {
@@ -1170,6 +1196,14 @@ export class Simulation {
     if (piece.type === 'water') return false; // El agua solo se cruza por puente/cruce o túnel
     if (piece.type === 'spawner' || piece.type === 'extractor') return false;
     if (piece.type === 'trash' || piece.type === 'delivery') return true;
+
+    // Fábricas de la Expansión Biomolecular & Cuántica (DLC)
+    if (piece.type === 'factory_1x1') {
+      return incomingDir !== piece.dir; // Admite entradas por detrás y laterales (no por la salida)
+    }
+    if (piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part') {
+      return true; // Admite múltiples entradas perimetrales
+    }
 
     // Cintas (estándar, rápida, lenta y oscilante)
     if (piece.type === 'belt' || piece.type === 'belt_fast' || piece.type === 'belt_slow' || piece.type === 'switching_belt') {
@@ -1355,6 +1389,8 @@ export class Renderer {
     this.initAmbientParticles();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    window.visualViewport?.addEventListener('resize', () => this.resize());
+    window.visualViewport?.addEventListener('scroll', () => this.resize());
   }
 
   initAmbientParticles() {
@@ -1430,8 +1466,10 @@ export class Renderer {
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
+    const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    this.width = width;
+    this.height = height;
     this.canvas.width = this.width * dpr;
     this.canvas.height = this.height * dpr;
     if (this.ctx.resetTransform) {
@@ -1534,6 +1572,11 @@ export class Renderer {
     // Indicadores flotantes de demanda sobre los almacenes
     this.drawDeliveryBadges(ctx);
 
+    // Barras de progreso y avisos de ingredientes flotantes del DLC
+    if (QuantumDLC.isEnabled) {
+      QuantumDLC.renderFloatingStatus(this, ctx, this.tileSize);
+    }
+
     ctx.restore();
 
     this.drawParticles(ctx, dt);
@@ -1593,6 +1636,12 @@ export class Renderer {
     const s = this.tileSize;
 
     for (const mine of grid.getAllMines()) {
+      // Yacimientos naturales específicos de la Expansión Biomolecular & Cuántica
+      if (mine.resourceType) {
+        QuantumDLC.drawDeposit(this, ctx, mine, s);
+        continue;
+      }
+
       const cx = (mine.x + 0.5) * s;
       const cy = (mine.y + 0.5) * s;
       const colorName = (mine.shape && mine.shape.left) ? mine.shape.left.color : 'mint';
@@ -1910,6 +1959,15 @@ export class Renderer {
         break;
       case 'water':
         this.renderWaterTile(ctx, s);
+        break;
+      case 'factory_1x1':
+        QuantumDLC.renderFactory1x1(this, ctx, piece, s);
+        break;
+      case 'factory_2x2':
+        QuantumDLC.renderFactory2x2(this, ctx, piece, s);
+        break;
+      case 'factory_2x2_part':
+        // Las partes esclavas del 2x2 son dibujadas conjuntamente por la raíz
         break;
     }
 
@@ -2584,6 +2642,21 @@ export class Renderer {
           ctx.stroke();
         }
       }
+      if (ghost.type === 'factory_2x2') {
+        const s = this.tileSize;
+        ctx.fillStyle = ghost.valid ? 'rgba(201, 182, 228, 0.25)' : 'rgba(232, 160, 160, 0.35)';
+        ctx.strokeStyle = ghost.valid ? '#AF7AC5' : '#E8A0A0';
+        ctx.lineWidth = 1.8;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(ghost.x * s + 2, ghost.y * s + 2, s * 2 - 4, s * 2 - 4, 12);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(ghost.x * s + 2, ghost.y * s + 2, s * 2 - 4, s * 2 - 4);
+          ctx.strokeRect(ghost.x * s + 2, ghost.y * s + 2, s * 2 - 4, s * 2 - 4);
+        }
+      }
       this.drawPiece(ctx, ghost);
     }
 
@@ -2927,6 +3000,7 @@ export class InputManager {
     }
 
     const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
+    this.lastHoverGrid = { x: pos.gridX, y: pos.gridY };
     this.game.updateGhost(pos.gridX, pos.gridY);
 
     // Zoom por pinza táctil (2 dedos)
@@ -3048,17 +3122,26 @@ export class InputManager {
     if (this.activePointers.size === 0) {
       const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
 
-      // Si es un tap limpio en pantalla táctil y en MODO EDICIÓN
-      if (this.game.mode === 'edit' && !this.isDraggingMap && !this.longPressTriggered && totalDist < 12) {
+      // Si es un tap limpio
+      if (!this.isDraggingMap && !this.longPressTriggered && totalDist < 12) {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
-        if (e.pointerType === 'touch') {
+        const clickedPiece = this.game.grid.get(pos.gridX, pos.gridY);
+
+        // Tocar una fábrica (1x1 o 2x2) abre cómodamente el menú contextual de recetas en móvil y PC
+        if (clickedPiece && (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part')) {
+          if (this.game.mode === 'view' || (this.game.selectedTool !== 'erase' && this.game.selectedTool !== 'belt')) {
+            QuantumDLC.openRecipeSelector(this.game, clickedPiece);
+          }
+        }
+
+        if (this.game.mode === 'edit' && e.pointerType === 'touch') {
           if (this.game.selectedTool === 'erase') {
             this.game.removePieceAt(pos.gridX, pos.gridY);
           } else if (this.game.selectedTool === 'belt') {
             if (!this.lastPlacedCell) {
               this.game.handleBeltPlacement(pos.gridX, pos.gridY);
             }
-          } else {
+          } else if (this.game.selectedTool !== 'factory_1x1' && this.game.selectedTool !== 'factory_2x2') {
             this.game.placePieceAt(pos.gridX, pos.gridY);
           }
         }
@@ -3186,6 +3269,31 @@ export class InputManager {
     if (!e.ctrlKey && !e.metaKey && (e.key === 'b' || e.key === 'B')) {
       if (this.game.mode === 'view') this.game.toggleMode();
       this.game.selectTool('buffer');
+      return;
+    }
+
+    // Interacción y cambio de receta (Tecla E) sobre fábricas
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'e' || e.key === 'E')) {
+      if (this.lastHoverGrid) {
+        const piece = this.game.grid.get(this.lastHoverGrid.x, this.lastHoverGrid.y);
+        if (piece && (piece.type === 'factory_1x1' || piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part')) {
+          QuantumDLC.openRecipeSelector(this.game, piece);
+          return;
+        }
+      }
+    }
+
+    // Tecla P -> Fábrica Estándar (1x1)
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'p' || e.key === 'P')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('factory_1x1');
+      return;
+    }
+
+    // Tecla M -> Mega Ensambladora (2x2)
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'm' || e.key === 'M')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('factory_2x2');
       return;
     }
 
@@ -3355,6 +3463,33 @@ export class UIManager {
         this.populateLevelsGrid();
       });
     }
+    const tab4 = document.getElementById('tab-chapter-4');
+    if (tab4) {
+      tab4.addEventListener('click', () => {
+        this.activeChapter = 4;
+        this.populateLevelsGrid();
+      });
+    }
+
+    // Toggle de la Expansión Biomolecular & Cuántica (DLC)
+    document.getElementById('btn-dlc-toggle')?.addEventListener('click', () => {
+      QuantumDLC.isEnabled = !QuantumDLC.isEnabled;
+      const btn = document.getElementById('btn-dlc-toggle');
+      if (btn) btn.classList.toggle('active', QuantumDLC.isEnabled);
+      this.game.audio.playPlaf();
+      this.showToast(QuantumDLC.isEnabled ? "🧬 Expansión Biomolecular & Cuántica Activa" : "Expansión desactivada", 1800);
+      this.updateAvailableTools(this.game.currentLevel?.availableTools || ['belt', 'extractor']);
+    });
+
+    // Botón flotante para inspección y cambio de recetas de máquinas (Tecla E / Móvil)
+    document.getElementById('btn-fab-recipe')?.addEventListener('click', () => {
+      const factories = this.game.grid.getAllPieces().filter(p => p.type === 'factory_1x1' || p.type === 'factory_2x2');
+      if (factories.length > 0) {
+        QuantumDLC.openRecipeSelector(this.game, factories[0]);
+      } else {
+        this.showToast("Coloca primero una Fábrica 1x1 o Mega Ensambladora 2x2", 2200);
+      }
+    });
 
     // Botones de Modo Zen y Deshacer / Rehacer
     document.getElementById('btn-zen-toggle')?.addEventListener('click', () => this.game.toggleZenMode());
@@ -3476,7 +3611,7 @@ export class UIManager {
     const hackerUnlockAll = document.getElementById('hacker-btn-unlock-all');
     if (hackerUnlockAll) {
       hackerUnlockAll.addEventListener('click', () => {
-        for (let i = 1; i <= 60; i++) {
+        for (let i = 1; i <= 64; i++) {
           if (!this.game.saveData.nivelesCompletados.includes(i)) {
             this.game.saveData.nivelesCompletados.push(i);
           }
@@ -3485,7 +3620,7 @@ export class UIManager {
         this.game.autoSave();
         this.populateLevelsGrid();
         this.updateMenuStats();
-        this.showToast("⭐ ¡Todos los 60 niveles desbloqueados con 3 estrellas!", 2500);
+        this.showToast("⭐ ¡Todos los 64 niveles desbloqueados con 3 estrellas!", 2500);
         this.toggleHackerModal(false);
       });
     }
@@ -3652,7 +3787,18 @@ export class UIManager {
     const cards = document.querySelectorAll('.tool-card');
     cards.forEach(card => {
       const tool = card.dataset.tool;
-      if (tool === 'erase' || tools.includes(tool)) {
+      const isDlcTool = (tool === 'factory_1x1' || tool === 'factory_2x2');
+      if (isDlcTool) {
+        if (!QuantumDLC.isEnabled && !tools.includes(tool)) {
+          card.style.display = 'none';
+          card.classList.add('disabled');
+          return;
+        } else {
+          card.style.display = '';
+        }
+      }
+
+      if (tool === 'erase' || tools.includes(tool) || (isDlcTool && QuantumDLC.isEnabled)) {
         card.classList.remove('disabled');
       } else {
         card.classList.add('disabled');
@@ -3852,10 +3998,12 @@ export class UIManager {
     const maxUnlocked = Math.max(1, ...(save.nivelesCompletados || [0])) + 1;
     const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
     const isChapter3Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(40)) || maxUnlocked > 40 || save.nivelActual > 40;
+    const isChapter4Unlocked = QuantumDLC.isEnabled || (save.nivelesCompletados && save.nivelesCompletados.includes(60)) || maxUnlocked > 60 || save.nivelActual > 60;
 
     const tab1 = document.getElementById('tab-chapter-1');
     const tab2 = document.getElementById('tab-chapter-2');
     const tab3 = document.getElementById('tab-chapter-3');
+    const tab4 = document.getElementById('tab-chapter-4');
     if (tab1) tab1.className = `level-tab-btn ${this.activeChapter === 1 ? 'active' : ''}`;
     if (tab2) {
       tab2.className = `level-tab-btn ${this.activeChapter === 2 ? 'active' : ''} ${!isChapter2Unlocked ? 'locked-tab' : ''}`;
@@ -3864,6 +4012,10 @@ export class UIManager {
     if (tab3) {
       tab3.className = `level-tab-btn ${this.activeChapter === 3 ? 'active' : ''} ${!isChapter3Unlocked ? 'locked-tab' : ''}`;
       tab3.title = isChapter3Unlocked ? "Capítulo 3: Vanguardia (41–60)" : "Completa el nivel 40 para desbloquear el Capítulo 3";
+    }
+    if (tab4) {
+      tab4.className = `level-tab-btn ${this.activeChapter === 4 ? 'active' : ''} ${!isChapter4Unlocked ? 'locked-tab' : ''}`;
+      tab4.title = isChapter4Unlocked ? "Capítulo 4: DLC Cuántico (61–64)" : "Activa el DLC para jugar la Expansión Cuántica";
     }
 
     let startLevel = 1;
@@ -3874,6 +4026,9 @@ export class UIManager {
     } else if (this.activeChapter === 3) {
       startLevel = 41;
       endLevel = 60;
+    } else if (this.activeChapter === 4) {
+      startLevel = 61;
+      endLevel = 64;
     }
 
     const filteredLevels = LEVELS.filter(l => l.id >= startLevel && l.id <= endLevel);
@@ -3881,8 +4036,10 @@ export class UIManager {
     filteredLevels.forEach(lvl => {
       const isCompleted = save.nivelesCompletados.includes(lvl.id);
       const isCurrent = save.nivelActual === lvl.id;
-      const chapterUnlocked = lvl.id <= 20 || (lvl.id <= 40 ? isChapter2Unlocked : isChapter3Unlocked);
-      const isUnlocked = (lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) && chapterUnlocked;
+      const chapterUnlocked = lvl.id <= 20 || 
+        (lvl.id <= 40 ? isChapter2Unlocked : 
+        (lvl.id <= 60 ? isChapter3Unlocked : isChapter4Unlocked));
+      const isUnlocked = ((lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) || (lvl.id === 61 && isChapter4Unlocked)) && chapterUnlocked;
 
       const btn = document.createElement('button');
       btn.className = `level-card-btn ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${!isUnlocked ? 'locked' : ''}`;
@@ -3912,7 +4069,9 @@ export class UIManager {
         });
       } else {
         btn.addEventListener('click', () => {
-          if (lvl.id > 40 && !isChapter3Unlocked) {
+          if (lvl.id > 60 && !isChapter4Unlocked) {
+            this.showToast("🔒 Activa la Expansión DLC para desbloquear este nivel", 2000);
+          } else if (lvl.id > 40 && !isChapter3Unlocked) {
             this.showToast("🔒 Completa el nivel 40 para desbloquear el Capítulo 3: Vanguardia", 2000);
           } else if (lvl.id > 20 && !isChapter2Unlocked) {
             this.showToast("🔒 Completa el nivel 20 para desbloquear el Capítulo 2", 2000);
@@ -3939,10 +4098,10 @@ export class UIManager {
     const coins = save.coins !== undefined ? save.coins : (save.monedas || 0);
 
     const starsEl = document.getElementById('menu-total-stars');
-    if (starsEl) starsEl.textContent = `⭐ ${totalStars}/180`;
+    if (starsEl) starsEl.textContent = `⭐ ${totalStars}/192`;
 
     const levelsEl = document.getElementById('menu-total-levels');
-    if (levelsEl) levelsEl.textContent = `🏆 ${completedCount}/60`;
+    if (levelsEl) levelsEl.textContent = `🏆 ${completedCount}/64`;
 
     const coinsEl = document.getElementById('menu-coins');
     if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
@@ -4485,6 +4644,8 @@ export class BeltFlowGame {
     } else if (action.type === 'rotate') {
       const piece = this.grid.get(action.x, action.y);
       if (piece) piece.dir = action.prevDir;
+    } else if (action.type === 'place_2x2') {
+      QuantumDLC.removeFactory2x2(this.grid, action.x, action.y);
     } else if (action.type === 'clear') {
       if (action.pieces) {
         action.pieces.forEach(p => this.grid.set(p.x, p.y, { ...p }));
@@ -4506,6 +4667,8 @@ export class BeltFlowGame {
     const action = this.redoStack.pop();
     if (action.type === 'place') {
       this.grid.set(action.x, action.y, { ...action.newPiece });
+    } else if (action.type === 'place_2x2') {
+      QuantumDLC.placeFactory2x2(this.grid, action.x, action.y, action.dir);
     } else if (action.type === 'remove') {
       this.grid.remove(action.x, action.y);
     } else if (action.type === 'rotate') {
@@ -4640,6 +4803,10 @@ export class BeltFlowGame {
       const mine = this.grid.getMine(gridX, gridY);
       valid = !!mine && (!existing || !existing.fixed);
       ghostShape = mine ? Shapes.clone(mine.shape) : null;
+    }
+
+    if (this.selectedTool === 'factory_2x2') {
+      valid = QuantumDLC.canPlaceFactory2x2(this.grid, gridX, gridY);
     }
 
     // Anticipar y alinear la dirección de la cinta automáticamente
@@ -4875,6 +5042,60 @@ export class BeltFlowGame {
       this.updateBudgetHUD();
       this.updateGhost(x, y);
       this.checkAchievements();
+      return;
+    }
+
+    // Fábrica Estándar (1x1) del DLC
+    if (this.selectedTool === 'factory_1x1') {
+      const newPiece = {
+        x: x,
+        y: y,
+        type: 'factory_1x1',
+        dir: this.placementDir,
+        recipeId: 'sugar_cube',
+        buffer: {},
+        isCrafting: false,
+        progress: 0.0,
+        fixed: false
+      };
+      this.recordAction({
+        type: 'place',
+        x, y,
+        prevPiece: existing ? { ...existing } : null,
+        newPiece: { ...newPiece }
+      });
+      this.grid.set(x, y, newPiece);
+      this.renderer.addPlacementEffect(x, y, 'factory_1x1');
+      this.audio.playPlaf();
+      this.updateBudgetHUD();
+      this.updateGhost(x, y);
+      this.checkAchievements();
+      return;
+    }
+
+    // Mega Ensambladora (2x2) del DLC
+    if (this.selectedTool === 'factory_2x2') {
+      if (!QuantumDLC.canPlaceFactory2x2(this.grid, x, y)) {
+        this.audio.playError();
+        this.ui.showToast("⚠️ Espacio de 2x2 insuficiente o bloqueado", 1800);
+        return;
+      }
+      const rootPiece = QuantumDLC.placeFactory2x2(this.grid, x, y, this.placementDir, 'quantum_sugar_cube');
+      if (rootPiece) {
+        this.recordAction({
+          type: 'place_2x2',
+          x, y,
+          dir: this.placementDir
+        });
+        this.renderer.addPlacementEffect(x, y, 'factory_2x2');
+        this.renderer.addPlacementEffect(x + 1, y, 'factory_2x2');
+        this.renderer.addPlacementEffect(x, y + 1, 'factory_2x2');
+        this.renderer.addPlacementEffect(x + 1, y + 1, 'factory_2x2');
+        this.audio.playPlaf();
+        this.updateBudgetHUD();
+        this.updateGhost(x, y);
+        this.checkAchievements();
+      }
       return;
     }
 
@@ -5224,6 +5445,15 @@ export class BeltFlowGame {
     if (completed.includes(20)) this.unlockAchievement('chapter_1');
     if (completed.includes(40)) this.unlockAchievement('chapter_2');
     if (completed.includes(60)) this.unlockAchievement('chapter_3');
+    if (completed.includes(64)) this.unlockAchievement('chapter_4');
+
+    // Expansión Biomolecular & Cuántica
+    if (this.sim.totalCrafted?.['sugar_cube'] || completed.includes(61)) {
+      this.unlockAchievement('first_sugar_cube');
+    }
+    if (this.sim.totalCrafted?.['quantum_sugar_cube'] || completed.includes(64)) {
+      this.unlockAchievement('quantum_master');
+    }
 
     // Mecánicas
     if (this.sim.totalSplittersProcessed >= 50) this.unlockAchievement('splitter_pro');
