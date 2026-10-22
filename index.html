@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>BeltFlow - Puzle de Automatización y Cintas Transportadoras</title>
-  <meta name="description" content="BeltFlow: Un juego de automatización y puzles con cintas transportadoras, estética suave y relajante anti-fatiga, y 20 niveles progresivos.">
-  <meta name="theme-color" content="#F2F0EB">
+  <title>BeltFlow: Cyber-Industrial Factory & Logistics Engine</title>
+  <meta name="description" content="High-performance 60 FPS web factory automation game inspired by Shapez 2 with native multi-touch controls, 3-tier logistics, cross-processing hubs, and real-time IPM analytics.">
+  <meta property="og:title" content="BeltFlow: Cyber-Industrial Factory & Logistics Engine">
+  <meta property="og:description" content="High-performance 60 FPS web factory automation game inspired by Shapez 2 with native multi-touch controls, 3-tier logistics, cross-processing hubs, and real-time IPM analytics.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0B0F17">
 
   <!-- Google Fonts: Inter, Nunito y JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,7 +34,7 @@
             </svg>
           </div>
           <h1 class="menu-title heading">BeltFlow</h1>
-          <p class="menu-tagline">Puzles de automatización relajantes y anti-fatiga</p>
+          <p class="menu-tagline">Ingeniería de automatización modular y logística de precisión</p>
         </div>
 
         <nav class="menu-actions">
@@ -44,11 +48,11 @@
           </button>
           <button id="menu-btn-levels" class="menu-btn">
             <span class="menu-btn-icon">☰</span>
-            <span class="menu-btn-text">Seleccionar Nivel (64)</span>
+            <span class="menu-btn-text">Seleccionar Nivel (68)</span>
           </button>
           <button id="menu-btn-achievements" class="menu-btn">
             <span class="menu-btn-icon">🏆</span>
-            <span class="menu-btn-text">Logros (28)</span>
+            <span class="menu-btn-text">Logros (31)</span>
           </button>
           <button id="menu-btn-shop" class="menu-btn">
             <span class="menu-btn-icon">🎀</span>
@@ -70,18 +74,18 @@
 
         <div class="menu-footer">
           <div class="menu-stats">
-            <span class="menu-stat-item" id="menu-total-stars">⭐ 0/192</span>
-            <span class="menu-stat-item" id="menu-total-levels">🏆 0/64</span>
+            <span class="menu-stat-item" id="menu-total-stars">⭐ 0/204</span>
+            <span class="menu-stat-item" id="menu-total-levels">🏆 0/68</span>
             <span class="menu-stat-item" id="menu-coins">🪙 0</span>
           </div>
-          <span class="menu-version">v3.2 • Expansión Biomolecular & Cuántica</span>
+          <span class="menu-version">v4.0 • Edición Cyber-Industrial & Mobile</span>
         </div>
       </aside>
 
       <div class="menu-preview-overlay">
         <div class="preview-hint-pill">
           <span class="preview-dot"></span>
-          <span>Demostración relajante continua • Pulsa Jugar para interactuar</span>
+          <span>Demostración en vivo • Toca o haz clic para entrar a la fábrica</span>
         </div>
       </div>
     </div>
@@ -125,6 +129,14 @@
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
           <span class="timer-value mono" id="timer-display">03:00</span>
+        </div>
+      </div>
+
+      <!-- Telemetría IPM en vivo (Items Por Minuto) -->
+      <div class="hud-panel" id="hud-ipm-panel">
+        <div class="stat-pill-box ipm-pill-box" title="Tasa de producción actual (Ítems Por Minuto)">
+          <span class="pill-badge-label">Flujo</span>
+          <span class="pill-badge-value mono" id="hud-ipm-display">0 IPM</span>
         </div>
       </div>
 
@@ -179,6 +191,13 @@
           <span class="mode-toggle-icon" id="mode-toggle-icon">✏️</span>
           <span class="mode-toggle-label" id="mode-toggle-label">Edición</span>
           <span class="mode-toggle-key mono">Q</span>
+        </button>
+
+        <!-- Telemetría IPM por casilla (Tecla I) -->
+        <button id="btn-ipm-toggle" class="mode-toggle-btn" title="Mostrar/Ocultar telemetría IPM en cada máquina (Tecla I)" aria-label="Telemetría IPM">
+          <span class="mode-toggle-icon">📊</span>
+          <span class="mode-toggle-label">IPM</span>
+          <span class="mode-toggle-key mono">I</span>
         </button>
 
         <!-- Deshacer (Ctrl+Z) -->
@@ -316,9 +335,9 @@
       </button>
 
       <!-- Botón Receta / Inspección (Tecla E / Móvil) -->
-      <button id="btn-fab-recipe" class="fab" title="Seleccionar receta de la fábrica (Tecla E)" aria-label="Receta">
+      <button id="btn-fab-recipe" class="fab" title="Inspeccionar / Configurar máquina (Tecla E)" aria-label="Configurar">
         <span style="font-size: 18px; line-height: 1;">🧪</span>
-        <span class="fab-label">RECETA</span>
+        <span class="fab-label">CONFIG</span>
       </button>
 
       <!-- Botón Modo Borrar -->
@@ -369,9 +388,16 @@
 
     <!-- Barra inferior con selector de componentes -->
     <nav class="bottom-dock" aria-label="Barra de herramientas">
-      <!-- Selector de color para pintor -->
+      <!-- Pestañas de filtro rápido de categorías (optimizado para táctil / móvil) -->
+      <div class="toolbar-categories" id="toolbar-categories">
+        <button class="toolbar-cat-btn active" data-cat="all">Todas</button>
+        <button class="toolbar-cat-btn" data-cat="logistics">Logística</button>
+        <button class="toolbar-cat-btn" data-cat="process">Proceso</button>
+      </div>
+
+      <!-- Selector de color para pintor y Hub Cruzado -->
       <div class="painter-color-bar" id="painter-color-bar">
-        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 4px;">Pintura:</span>
+        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 4px;">Pigmento:</span>
         <button class="color-swatch active" data-color="mint" style="background-color: var(--pastel-mint);" title="Menta"></button>
         <button class="color-swatch" data-color="sky" style="background-color: var(--pastel-sky);" title="Cielo"></button>
         <button class="color-swatch" data-color="lavender" style="background-color: var(--pastel-lavender);" title="Lavanda"></button>
@@ -407,7 +433,7 @@
       <!-- Barra de herramientas con tarjetas -->
       <div class="tools-bar" id="tools-bar">
         <!-- 1: Cinta -->
-        <button class="tool-card active" data-tool="belt" title="Cinta transportadora (Tecla 1)">
+        <button class="tool-card active" data-tool="belt" title="Cinta transportadora MK1 (Tecla 1)">
           <span class="tool-badge">1</span>
           <div class="tool-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -418,6 +444,43 @@
             </svg>
           </div>
           <span class="tool-name">Cinta</span>
+        </button>
+
+        <!-- Cinta Rápida MK2 -->
+        <button class="tool-card" data-tool="belt_fast" title="Cinta Rápida MK2 2x (Tecla Shift+1)">
+          <span class="tool-badge">⚡</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="13 17 18 12 13 7"></polyline>
+              <polyline points="6 17 11 12 6 7"></polyline>
+            </svg>
+          </div>
+          <span class="tool-name">Rápida</span>
+        </button>
+
+        <!-- Cinta Hiper MK3 -->
+        <button class="tool-card" data-tool="belt_hyper" title="Cinta Hiper MK3 3x • 270 IPM (Tecla H)">
+          <span class="tool-badge">H</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="15 17 20 12 15 7"></polyline>
+              <polyline points="9 17 14 12 9 7"></polyline>
+              <polyline points="3 17 8 12 3 7"></polyline>
+            </svg>
+          </div>
+          <span class="tool-name">Hiper MK3</span>
+        </button>
+
+        <!-- Cinta Lenta -->
+        <button class="tool-card" data-tool="belt_slow" title="Cinta Lenta 0.5x (Tecla Alt+1)">
+          <span class="tool-badge">🐢</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </div>
+          <span class="tool-name">Lenta</span>
         </button>
 
         <!-- 2: Extractor -->
@@ -433,22 +496,8 @@
           <span class="tool-name">Extractor</span>
         </button>
 
-        <!-- 3: Trituradora -->
-        <button class="tool-card" data-tool="trash" title="Trituradora / Basurero (Tecla 3)">
-          <span class="tool-badge">3</span>
-          <div class="tool-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-          </div>
-          <span class="tool-name">Tritura</span>
-        </button>
-
         <!-- 4: Cortadora -->
-        <button class="tool-card" data-tool="cutter" title="Cortadora (Tecla 4)">
+        <button class="tool-card" data-tool="cutter" title="Cortadora 2x1 (Tecla 4)">
           <span class="tool-badge">4</span>
           <div class="tool-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -487,6 +536,18 @@
           <span class="tool-name">Fabricador</span>
         </button>
 
+        <!-- Hub Cruzado (Fusión + Pintura) -->
+        <button class="tool-card" data-tool="cross_hub" title="Hub Cruzado: Fusiona y Tiñe en 1x1 (Tecla K)">
+          <span class="tool-badge">K</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2"></polygon>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </div>
+          <span class="tool-name">Hub Cruz</span>
+        </button>
+
         <!-- 7: Túnel -->
         <button class="tool-card" data-tool="tunnel" title="Túnel Subterráneo (Tecla 7)">
           <span class="tool-badge">7</span>
@@ -500,7 +561,7 @@
         </button>
 
         <!-- 9: Divisor -->
-        <button class="tool-card" data-tool="splitter" title="Divisor / Splitter (Tecla 9)">
+        <button class="tool-card" data-tool="splitter" title="Divisor / Splitter con Prioridad (Tecla 9, E para modo)">
           <span class="tool-badge">9</span>
           <div class="tool-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -510,6 +571,20 @@
             </svg>
           </div>
           <span class="tool-name">Divisor</span>
+        </button>
+
+        <!-- Balanceador Triple (1:3) -->
+        <button class="tool-card" data-tool="balancer" title="Balanceador Triple 1:3 (Tecla G)">
+          <span class="tool-badge">G</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 20V8"></path>
+              <path d="M5 12l7-7 7 7"></path>
+              <circle cx="5" cy="12" r="2"></circle>
+              <circle cx="19" cy="12" r="2"></circle>
+            </svg>
+          </div>
+          <span class="tool-name">Balance 1:3</span>
         </button>
 
         <!-- 0: Fusionador -->
@@ -548,30 +623,6 @@
           <span class="tool-name">Cruce</span>
         </button>
 
-        <!-- Cinta Rápida -->
-        <button class="tool-card" data-tool="belt_fast" title="Cinta Rápida 2x (Tecla Shift+1)">
-          <span class="tool-badge">⚡</span>
-          <div class="tool-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <polyline points="13 17 18 12 13 7"></polyline>
-              <polyline points="6 17 11 12 6 7"></polyline>
-            </svg>
-          </div>
-          <span class="tool-name">Rápida</span>
-        </button>
-
-        <!-- Cinta Lenta -->
-        <button class="tool-card" data-tool="belt_slow" title="Cinta Lenta 0.5x (Tecla Alt+1)">
-          <span class="tool-badge">🐢</span>
-          <div class="tool-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
-          </div>
-          <span class="tool-name">Lenta</span>
-        </button>
-
         <!-- Buffer -->
         <button class="tool-card" data-tool="buffer" title="Almacén Buffer (Tecla B)">
           <span class="tool-badge">B</span>
@@ -601,6 +652,20 @@
             </svg>
           </div>
           <span class="tool-name">Mega 2x2</span>
+        </button>
+
+        <!-- 3: Trituradora -->
+        <button class="tool-card" data-tool="trash" title="Trituradora / Basurero (Tecla 3)">
+          <span class="tool-badge">3</span>
+          <div class="tool-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <span class="tool-name">Tritura</span>
         </button>
 
         <!-- 8: Borrador -->
@@ -666,7 +731,7 @@
       </div>
     </div>
 
-    <!-- Modal de Selección de Niveles (40 niveles con capítulos y estrellas) -->
+    <!-- Modal de Selección de Niveles (68 niveles con capítulos y estrellas) -->
     <div class="modal-overlay" id="levels-modal">
       <div class="modal-card">
         <div class="modal-header">
@@ -675,10 +740,11 @@
         </div>
         <div class="modal-body">
           <div class="levels-tabs" id="levels-tabs">
-            <button class="level-tab-btn active" id="tab-chapter-1">Capítulo 1: Fundamentos (1–20)</button>
-            <button class="level-tab-btn" id="tab-chapter-2">Capítulo 2: Maestría (21–40)</button>
-            <button class="level-tab-btn" id="tab-chapter-3">Capítulo 3: Vanguardia (41–60)</button>
-            <button class="level-tab-btn" id="tab-chapter-4">Capítulo 4: Cuántica (61–64)</button>
+            <button class="level-tab-btn active" id="tab-chapter-1">Cap. 1: Fundamentos (1–20)</button>
+            <button class="level-tab-btn" id="tab-chapter-2">Cap. 2: Maestría (21–40)</button>
+            <button class="level-tab-btn" id="tab-chapter-3">Cap. 3: Vanguardia (41–60)</button>
+            <button class="level-tab-btn" id="tab-chapter-4">Cap. 4: Cuántica (61–64)</button>
+            <button class="level-tab-btn" id="tab-chapter-5">⚡ Cap. 5: Cyber-Industrial (65–68)</button>
           </div>
           <div class="levels-grid" id="levels-grid-container">
             <!-- Rellenado dinámicamente con los niveles y estrellas -->
@@ -815,27 +881,35 @@
             </div>
 
             <div style="margin-top: 10px; padding: 12px; background: var(--bg-color); border-radius: 10px; font-size: 13px; color: var(--text-muted);">
-              <strong style="color: var(--text-bright); display: block; margin-bottom: 6px;">Controles de PC:</strong>
-              • Clic izquierdo: Colocar pieza<br>
-              • Clic derecho: Eliminar pieza<br>
-              • Tecla Q: Alternar Modo Vista / Edición<br>
-              • Teclas 1-8: Seleccionar componente<br>
-              • Tecla R: Rotar pieza<br>
-              • Tecla Espacio: Pausar / Continuar (o mantener pulsado para desplazar)<br>
-              • Botón central del ratón: Desplazar mapa libremente<br>
-              • Teclas WASD / Flechas: Desplazar mapa<br>
-              • Teclas + / - o rueda: Zoom
+              <strong style="color: var(--text-bright); display: block; margin-bottom: 6px;">Controles Táctiles & Teclado:</strong>
+              • <strong>Móvil / Tablet:</strong> Pellizcar con 2 dedos para zoom y desplazamiento simultáneos; deslizar en Modo Edición para dibujar cintas continuas.<br>
+              • <strong>Teclas 1-8:</strong> Seleccionar componente • <strong>H:</strong> Cinta Hiper MK3 • <strong>G:</strong> Balanceador 1:3 • <strong>K:</strong> Hub Cruzado<br>
+              • <strong>Tecla E / Toque en Vista:</strong> Configurar receta, prioridad de divisor o color<br>
+              • <strong>Tecla I:</strong> Telemetría IPM por casilla • <strong>Tecla Q:</strong> Modo Vista / Edición • <strong>Tecla R:</strong> Rotar pieza
             </div>
 
             <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
-              <button id="btn-reset-save" class="btn btn-danger" style="font-size: 12px; padding: 6px 12px;">Reiniciar Todo el Progreso</button>
+              <button id="btn-reset-save" class="btn btn-danger" style="font-size: 12px; padding: 6px 12px;">Borrar progreso guardado</button>
             </div>
           </div>
 
           <!-- Panel de Ajustes: Estética & Paletas (Presets aplicados en caliente) -->
           <div class="settings-tab-panel" id="panel-cfg-aesthetic" style="display: none;">
-            <p class="aesthetic-desc">Personaliza el aspecto cromático general de BeltFlow en tiempo real con nuestras 6 paletas armonizadas:</p>
+            <p class="aesthetic-desc">Personaliza el aspecto cromático general de BeltFlow en tiempo real con nuestras 7 paletas armonizadas:</p>
             <div class="palette-presets-grid" id="palette-presets-grid">
+              <div class="palette-card" data-preset="cyberpunk">
+                <div class="palette-preview-dots">
+                  <span style="background: #0B0F17;"></span>
+                  <span style="background: #00F0FF;"></span>
+                  <span style="background: #FF2A85;"></span>
+                  <span style="background: #FFB800;"></span>
+                </div>
+                <div class="palette-info">
+                  <strong class="palette-name">⚡ Cyber-Industrial (Nuevo)</strong>
+                  <span class="palette-meta">Pizarra obsidiana, neón cian y magenta industrial</span>
+                </div>
+              </div>
+
               <div class="palette-card active" data-preset="suave">
                 <div class="palette-preview-dots">
                   <span style="background: #F2F0EB;"></span>
@@ -933,22 +1007,22 @@
         <div class="modal-body credits-body">
           <div class="credits-section">
             <span class="credits-role">Concepto & Automatización</span>
-            <span class="credits-name">Inspirado en la elegancia minimalista de Shapez.io</span>
+            <span class="credits-name">Inspirado en la elegancia modular de Shapez 2</span>
           </div>
           <div class="credits-section">
-            <span class="credits-role">Diseño Visual & Anti-Fatiga</span>
-            <span class="credits-name">Paletas pastel ergonómicas, doble capa de sombras y micro-biseles</span>
+            <span class="credits-role">Diseño Visual & Cyber-Industrial</span>
+            <span class="credits-name">Paletas ergonómicas, telemetría IPM en vivo y micro-animaciones</span>
           </div>
           <div class="credits-section">
             <span class="credits-role">Diseño Sonoro Acústico</span>
-            <span class="credits-name">Web Audio API pura: tonos de madera/goma relajantes sin estridencias</span>
+            <span class="credits-name">Web Audio API pura: síntesis generativa sin dependencias</span>
           </div>
           <div class="credits-section">
             <span class="credits-role">Motor & Renderizado</span>
-            <span class="credits-name">Vanilla JavaScript, HTML5 Canvas 2D a 60 FPS sin dependencias</span>
+            <span class="credits-name">HTML5 Canvas 2D con Frustum Culling a 60 FPS y soporte Multi-Touch</span>
           </div>
           <div class="credits-quote">
-            "Cada cinta transportadora es un flujo de serenidad. Respira hondo, tómate tu tiempo y disfruta optimizando."
+            "Cada cinta transportadora es un flujo de precisión. Diseña, equilibra y optimiza tu fábrica."
           </div>
         </div>
       </div>
@@ -968,15 +1042,15 @@
           <p class="hacker-intro mono">// Acceso privilegiado concedido. Elige una acción de prueba:</p>
           
           <div class="hacker-section">
-            <span class="hacker-section-title mono">&gt; Saltar a cualquier nivel (1 al 40):</span>
+            <span class="hacker-section-title mono">&gt; Saltar a cualquier nivel (1 al 68):</span>
             <div class="hacker-levels-grid" id="hacker-levels-grid">
-              <!-- Rellenado dinámicamente con botones 1 a 40 -->
+              <!-- Rellenado dinámicamente con botones 1 a 68 -->
             </div>
           </div>
 
           <div class="hacker-buttons-row">
             <button id="hacker-btn-unlock-all" class="hacker-btn">
-              ⭐ Desbloquear Todo (40 niveles + 3★)
+              ⭐ Desbloquear Todo (68 niveles + 3★)
             </button>
             <button id="hacker-btn-instant-win" class="hacker-btn">
               ⚡ Completar Nivel Actual
@@ -1000,7 +1074,7 @@
       </div>
 
       <div class="sidebar-body" id="sidebar-content">
-        <!-- Rellenado dinámicamente según sea Fabricador o Pintor -->
+        <!-- Rellenado dinámicamente según sea Fabricador, Divisor o Pintor -->
       </div>
 
       <div class="sidebar-footer">

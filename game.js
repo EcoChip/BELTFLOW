@@ -32,22 +32,24 @@ export class SaveManager {
       estrellas: {},
       coins: 0,
       cosmetics: {
-        beltSkin: 'default',
+        beltSkin: 'skin_cyber',
         shapeTheme: 'default'
       },
-      unlockedCosmetics: ['default'],
+      unlockedCosmetics: ['default', 'skin_cyber'],
       achievements: [],
       gameMode: 'relaxed', // 'relaxed' (default) o 'challenge'
       customLevels: [],
       config: {
         modoOscuro: false,
+        dayModeWhiteDefaultV4: true,
         zoom: 1.0,
         tipoDispositivo: 'auto',
         reducirMovimiento: false,
         sonido: true,
         volumen: 0.8,
-        palettePreset: 'suave',
-        ambientMusic: true
+        palettePreset: 'cyberpunk',
+        ambientMusic: true,
+        showIPMOverlay: false
       },
       construcciones: {}
     };
@@ -86,6 +88,13 @@ export class SaveManager {
         estrellas: parsed.estrellas || {},
         nivelesCompletados: parsed.nivelesCompletados || []
       };
+
+      // Activar el nuevo Modo Día Blanco por defecto al actualizar a v4.0
+      if (!merged.config.dayModeWhiteDefaultV4) {
+        merged.config.modoOscuro = false;
+        merged.config.dayModeWhiteDefaultV4 = true;
+        SaveManager.save(merged);
+      }
 
       // Si migramos por primera vez, calcular monedas iniciales
       if (isMigrated && merged.coins === 0 && merged.estrellas) {
@@ -707,34 +716,109 @@ export class Simulation {
     this.grid = grid;
     this.onDelivery = onDelivery;
     this.items = [];
+    this.cellItems = new Map(); // O(1) spatial hash: key -> Item[]
+    this.nodeThroughput = new Map(); // key -> timestamp[] (last 15s for IPM telemetry)
     this.nextItemId = 1;
     this.spawnerTimers = new Map();
     this.machineAnims = [];
     this.deliveryTimestamps = [];
     this.currentThroughputRate = 0.0;
+    this.currentIPM = 0;
     this.rateSustainedTimer = 0.0;
     this.totalTrashDestroyed = 0;
     this.totalPortalsTraversed = 0;
     this.totalCrossingsTraversed = 0;
     this.totalFiltersProcessed = 0;
     this.totalSplittersProcessed = 0;
+    this.totalCrossHubProcessed = 0;
   }
 
   reset() {
     this.items = [];
+    this.cellItems.clear();
+    this.nodeThroughput.clear();
     this.spawnerTimers.clear();
     this.machineAnims = [];
     this.deliveryTimestamps = [];
     this.currentThroughputRate = 0.0;
+    this.currentIPM = 0;
     this.rateSustainedTimer = 0.0;
     this.totalTrashDestroyed = 0;
     this.totalPortalsTraversed = 0;
     this.totalCrossingsTraversed = 0;
     this.totalFiltersProcessed = 0;
     this.totalSplittersProcessed = 0;
+    this.totalCrossHubProcessed = 0;
+  }
+
+  rebuildSpatialIndex() {
+    this.cellItems.clear();
+    for (let i = 0; i < this.items.length; i++) {
+      const it = this.items[i];
+      const k = `${it.x},${it.y}`;
+      let bucket = this.cellItems.get(k);
+      if (!bucket) {
+        bucket = [];
+        this.cellItems.set(k, bucket);
+      }
+      bucket.push(it);
+    }
+  }
+
+  isCellEntryBlocked(x, y, threshold = 0.35) {
+    const bucket = this.cellItems.get(`${x},${y}`);
+    if (!bucket) return false;
+    for (let i = 0; i < bucket.length; i++) {
+      if (bucket[i].progress < threshold) return true;
+    }
+    return false;
+  }
+
+  recordNodePass(x, y, nowSec) {
+    const k = `${x},${y}`;
+    let ts = this.nodeThroughput.get(k);
+    if (!ts) {
+      ts = [];
+      this.nodeThroughput.set(k, ts);
+    }
+    ts.push(nowSec);
+  }
+
+  getNodeIPM(x, y) {
+    const ts = this.nodeThroughput.get(`${x},${y}`);
+    if (!ts || ts.length === 0) return 0;
+    const nowSec = performance.now() / 1000;
+    while (ts.length > 0 && nowSec - ts[0] > 12.0) {
+      ts.shift();
+    }
+    return Math.round((ts.length / 12.0) * 60);
+  }
+
+  moveItemToCell(item, nextX, nextY, nextInDir, nowSec) {
+    const oldKey = `${item.x},${item.y}`;
+    const oldBucket = this.cellItems.get(oldKey);
+    if (oldBucket) {
+      const idx = oldBucket.indexOf(item);
+      if (idx !== -1) oldBucket.splice(idx, 1);
+    }
+    item.x = nextX;
+    item.y = nextY;
+    item.inDir = nextInDir;
+    item.progress = 0.0;
+    item.processingTimer = 0;
+
+    const newKey = `${nextX},${nextY}`;
+    let newBucket = this.cellItems.get(newKey);
+    if (!newBucket) {
+      newBucket = [];
+      this.cellItems.set(newKey, newBucket);
+    }
+    newBucket.push(item);
+    this.recordNodePass(nextX, nextY, nowSec);
   }
 
   triggerMachineAnim(x, y, type, data = {}) {
+    if (this.machineAnims.length > 140) return; // Cap active anims for 60 FPS
     this.machineAnims.push({
       x,
       y,
@@ -747,7 +831,7 @@ export class Simulation {
 
   update(dt, speedMult = 1.0) {
     const effectiveDt = dt * speedMult;
-    const beltSpeed = 1.5; // Celdas por segundo estándar
+    const beltSpeed = 1.5; // Celdas por segundo estándar (90 IPM)
 
     // Limpiar micro-animaciones expiradas
     const nowMs = performance.now();
@@ -761,6 +845,9 @@ export class Simulation {
     const nowSec = nowMs / 1000;
     this.deliveryTimestamps = (this.deliveryTimestamps || []).filter(t => nowSec - t <= 10.0);
     this.currentThroughputRate = this.deliveryTimestamps.length / 10.0;
+    this.currentIPM = Math.round(this.currentThroughputRate * 60);
+
+    this.rebuildSpatialIndex();
 
     // Actualizar elementos dinámicos de mapa: Cintas Giratorias (switching_belt)
     for (const piece of this.grid.getAllPieces()) {
@@ -784,7 +871,7 @@ export class Simulation {
         const key = this.grid.key(piece.x, piece.y);
         let timer = (this.spawnerTimers.get(key) || 0) + effectiveDt;
 
-        const spawnInterval = 1.8;
+        const spawnInterval = 1.5; // Optimizado a 40 IPM por extractor
         if (timer >= spawnInterval) {
           timer = 0;
           const delta = DIR_DELTA[piece.dir];
@@ -793,9 +880,10 @@ export class Simulation {
           const targetPiece = this.grid.get(outX, outY);
 
           if (targetPiece && this.canAcceptItem(targetPiece, piece.dir)) {
-            const isBlocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
-            if (!isBlocked) {
+            if (!this.isCellEntryBlocked(outX, outY, 0.35)) {
               this.spawnItem(Shapes.clone(piece.shape), outX, outY, piece.dir);
+              this.recordNodePass(piece.x, piece.y, nowSec);
+              this.recordNodePass(outX, outY, nowSec);
               this.triggerMachineAnim(piece.x, piece.y, 'extractor_pulse', {
                 dir: piece.dir,
                 color: piece.shape.left ? piece.shape.left.color : null
@@ -819,17 +907,20 @@ export class Simulation {
 
       // Velocidad específica de la celda
       let tileSpeed = beltSpeed;
-      if (piece.type === 'belt_fast') {
-        tileSpeed = beltSpeed * 2.0; // 3.0 celdas/s
+      if (piece.type === 'belt_hyper') {
+        tileSpeed = beltSpeed * 3.0; // 4.5 celdas/s (270 IPM max)
+      } else if (piece.type === 'belt_fast') {
+        tileSpeed = beltSpeed * 2.0; // 3.0 celdas/s (180 IPM)
       } else if (piece.type === 'belt_slow') {
-        tileSpeed = beltSpeed * 0.5; // 0.75 celdas/s
+        tileSpeed = beltSpeed * 0.5; // 0.75 celdas/s (45 IPM)
       }
 
       // Trituradora: desintegra la forma
       if (piece.type === 'trash') {
-        item.progress += effectiveDt * 2.2;
+        item.progress += effectiveDt * 2.5;
         if (item.progress >= 1.0) {
           this.totalTrashDestroyed++;
+          this.recordNodePass(piece.x, piece.y, nowSec);
           this.triggerMachineAnim(piece.x, piece.y, 'trash_shrink', {
             color: item.shape && item.shape.left ? item.shape.left.color : 'coral'
           });
@@ -840,9 +931,10 @@ export class Simulation {
 
       // Salida / Delivery: entrega y recepción
       if (piece.type === 'delivery') {
-        item.progress += effectiveDt * 3.0;
+        item.progress += effectiveDt * 3.2;
         if (item.progress >= 0.8) {
-          this.deliveryTimestamps.push(performance.now() / 1000);
+          this.deliveryTimestamps.push(nowSec);
+          this.recordNodePass(piece.x, piece.y, nowSec);
           this.triggerMachineAnim(piece.x, piece.y, 'delivery_pulse', {});
           if (this.onDelivery) this.onDelivery(item.shape, piece);
           this.items.splice(i, 1);
@@ -853,16 +945,64 @@ export class Simulation {
       // Cortadora y Pintor
       if (piece.type === 'cutter' || piece.type === 'painter') {
         item.processingTimer = (item.processingTimer || 0) + effectiveDt;
-        const requiredTime = 0.5;
+        const requiredTime = 0.45;
 
         if (item.processingTimer < requiredTime) {
           item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
           continue;
         }
 
-        const handled = this.processMachineOutput(piece, item);
+        const handled = this.processMachineOutput(piece, item, nowSec);
         if (handled) {
+          this.recordNodePass(piece.x, piece.y, nowSec);
           this.items.splice(i, 1);
+        }
+        continue;
+      }
+
+      // Cross-Processing Hub (cross_hub): Fusiona 2 flujos y los tiñe simultáneamente al color seleccionado
+      if (piece.type === 'cross_hub') {
+        item.processingTimer = (item.processingTimer || 0) + effectiveDt;
+        if (item.progress < 0.5) {
+          item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed * 1.4);
+        }
+
+        const delta = DIR_DELTA[piece.dir];
+        const outX = piece.x + delta.x;
+        const outY = piece.y + delta.y;
+        const nextPiece = this.grid.get(outX, outY);
+
+        if (nextPiece && this.canAcceptItem(nextPiece, piece.dir) && !this.isCellEntryBlocked(outX, outY, 0.35)) {
+          const cellBucket = this.cellItems.get(`${piece.x},${piece.y}`) || [];
+          const other = cellBucket.find(it => it !== item);
+          const hubColor = piece.color || PASTEL_COLORS.SKY;
+
+          if (other) {
+            const combined = Shapes.mix(item.shape, other.shape);
+            const painted = Shapes.paint(combined, hubColor);
+            const otherIdx = this.items.indexOf(other);
+            if (otherIdx !== -1) this.items.splice(otherIdx, 1);
+            const currentIdx = this.items.indexOf(item);
+            if (currentIdx !== -1) this.items.splice(currentIdx, 1);
+            this.totalCrossHubProcessed++;
+            this.recordNodePass(piece.x, piece.y, nowSec);
+            this.recordNodePass(outX, outY, nowSec);
+            this.triggerMachineAnim(piece.x, piece.y, 'factory_crafted', { dir: piece.dir, type: 'cross_hub', color: hubColor });
+            this.spawnItem(painted, outX, outY, piece.dir);
+            this.rebuildSpatialIndex();
+            continue;
+          } else if (item.processingTimer > 1.2) {
+            // Si pasa 1.2s con un solo flujo, lo tiñe y despacha para evitar bloqueo permanente
+            const paintedSingle = Shapes.paint(item.shape, hubColor);
+            this.items.splice(i, 1);
+            this.totalCrossHubProcessed++;
+            this.recordNodePass(piece.x, piece.y, nowSec);
+            this.recordNodePass(outX, outY, nowSec);
+            this.triggerMachineAnim(piece.x, piece.y, 'painter_drop', { dir: piece.dir, color: hubColor });
+            this.spawnItem(paintedSingle, outX, outY, piece.dir);
+            this.rebuildSpatialIndex();
+            continue;
+          }
         }
         continue;
       }
@@ -880,8 +1020,7 @@ export class Simulation {
         const nextPiece = this.grid.get(outX, outY);
 
         if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-          const outBlocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
-          if (!outBlocked) {
+          if (!this.isCellEntryBlocked(outX, outY, 0.35)) {
             const otherIdx = this.items.findIndex(it => it !== item && it.x === piece.x && it.y === piece.y);
             if (otherIdx !== -1) {
               const other = this.items[otherIdx];
@@ -889,12 +1028,17 @@ export class Simulation {
               this.items.splice(otherIdx, 1);
               const currentIdx = this.items.indexOf(item);
               if (currentIdx !== -1) this.items.splice(currentIdx, 1);
+              this.recordNodePass(piece.x, piece.y, nowSec);
+              this.recordNodePass(outX, outY, nowSec);
               this.triggerMachineAnim(piece.x, piece.y, 'factory_crafted', { dir: piece.dir, type: piece.type });
               this.spawnItem(combined, outX, outY, piece.dir);
+              this.rebuildSpatialIndex();
               continue;
             } else if (item.processingTimer > 1.8 && item.shape.left && item.shape.right) {
               this.items.splice(i, 1);
+              this.recordNodePass(piece.x, piece.y, nowSec);
               this.spawnItem(item.shape, outX, outY, piece.dir);
+              this.rebuildSpatialIndex();
               continue;
             }
           }
@@ -921,13 +1065,9 @@ export class Simulation {
             const nextPiece = this.grid.get(outX, outY);
 
             if (nextPiece && this.canAcceptItem(nextPiece, exit.dir)) {
-              const blocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
-              if (!blocked) {
-                item.x = outX;
-                item.y = outY;
-                item.inDir = exit.dir;
-                item.progress = 0.0;
+              if (!this.isCellEntryBlocked(outX, outY, 0.35)) {
                 item.isUnderground = false;
+                this.moveItemToCell(item, outX, outY, exit.dir, nowSec);
               }
             }
           }
@@ -938,15 +1078,25 @@ export class Simulation {
         }
       }
 
-      // Divisor (Splitter): reparte alternadamente entre recto y lateral
+      // Divisor (Splitter): reparte alternadamente entre recto y lateral con prioridad configurable
       if (piece.type === 'splitter') {
         item.progress += effectiveDt * tileSpeed;
         if (item.progress >= 1.0) {
           const straightDir = piece.dir;
           const sideDir = (piece.dir + 1) % 4; // Desvío a 90°
           piece.splitPhase = piece.splitPhase || 0;
-          const preferredDir = (piece.splitPhase % 2 === 0) ? straightDir : sideDir;
-          const alternateDir = (piece.splitPhase % 2 === 0) ? sideDir : straightDir;
+          const mode = piece.splitMode || 'balanced'; // 'balanced' | 'priority_main' | 'priority_side'
+
+          let preferredDir = (piece.splitPhase % 2 === 0) ? straightDir : sideDir;
+          let alternateDir = (piece.splitPhase % 2 === 0) ? sideDir : straightDir;
+
+          if (mode === 'priority_main') {
+            preferredDir = straightDir;
+            alternateDir = sideDir;
+          } else if (mode === 'priority_side') {
+            preferredDir = sideDir;
+            alternateDir = straightDir;
+          }
 
           let targetDir = preferredDir;
           let delta = DIR_DELTA[targetDir];
@@ -954,8 +1104,7 @@ export class Simulation {
           let nextY = item.y + delta.y;
           let nextPiece = this.grid.get(nextX, nextY);
 
-          let canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) &&
-            !this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+          let canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) && !this.isCellEntryBlocked(nextX, nextY, 0.35);
 
           if (!canGo) {
             targetDir = alternateDir;
@@ -963,17 +1112,13 @@ export class Simulation {
             nextX = item.x + delta.x;
             nextY = item.y + delta.y;
             nextPiece = this.grid.get(nextX, nextY);
-            canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) &&
-              !this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
+            canGo = nextPiece && this.canAcceptItem(nextPiece, targetDir) && !this.isCellEntryBlocked(nextX, nextY, 0.35);
           }
 
           if (canGo) {
             piece.splitPhase++;
             this.totalSplittersProcessed++;
-            item.x = nextX;
-            item.y = nextY;
-            item.inDir = targetDir;
-            item.progress = 0.0;
+            this.moveItemToCell(item, nextX, nextY, targetDir, nowSec);
             this.triggerMachineAnim(piece.x, piece.y, 'splitter_pulse', { dir: targetDir });
           } else {
             item.progress = 1.0;
@@ -982,9 +1127,45 @@ export class Simulation {
         continue;
       }
 
+      // Balanceador 3-Vías (balancer): reparte equitativamente en 3 salidas (izquierda, frente, derecha)
+      if (piece.type === 'balancer') {
+        item.progress += effectiveDt * tileSpeed * 1.25;
+        if (item.progress >= 1.0) {
+          const dirs = [
+            piece.dir,               // Frente
+            (piece.dir + 1) % 4,     // Derecha
+            (piece.dir + 3) % 4      // Izquierda
+          ];
+          piece.balanceIdx = piece.balanceIdx || 0;
+
+          let dispatched = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const candidateDir = dirs[(piece.balanceIdx + attempt) % 3];
+            const delta = DIR_DELTA[candidateDir];
+            const nextX = item.x + delta.x;
+            const nextY = item.y + delta.y;
+            const nextPiece = this.grid.get(nextX, nextY);
+
+            if (nextPiece && this.canAcceptItem(nextPiece, candidateDir) && !this.isCellEntryBlocked(nextX, nextY, 0.35)) {
+              piece.balanceIdx = (piece.balanceIdx + attempt + 1) % 3;
+              this.totalSplittersProcessed++;
+              this.moveItemToCell(item, nextX, nextY, candidateDir, nowSec);
+              this.triggerMachineAnim(piece.x, piece.y, 'splitter_pulse', { dir: candidateDir });
+              dispatched = true;
+              break;
+            }
+          }
+
+          if (!dispatched) {
+            item.progress = 1.0;
+          }
+        }
+        continue;
+      }
+
       // Fusionador (Merger): recibe de varias entradas y entrega por el frente
       if (piece.type === 'merger') {
-        item.progress += effectiveDt * tileSpeed;
+        item.progress += effectiveDt * tileSpeed * 1.25;
         if (item.progress >= 1.0) {
           const delta = DIR_DELTA[piece.dir];
           const nextX = item.x + delta.x;
@@ -992,12 +1173,8 @@ export class Simulation {
           const nextPiece = this.grid.get(nextX, nextY);
 
           if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-            if (!blocked) {
-              item.x = nextX;
-              item.y = nextY;
-              item.inDir = piece.dir;
-              item.progress = 0.0;
+            if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
+              this.moveItemToCell(item, nextX, nextY, piece.dir, nowSec);
               this.triggerMachineAnim(piece.x, piece.y, 'merger_pulse', { dir: piece.dir });
             } else {
               item.progress = 1.0;
@@ -1027,7 +1204,6 @@ export class Simulation {
           } else if (fShape) {
             matches = Shapes.matches(item.shape, fShape);
           } else {
-            // Predeterminado: compara con la primera demanda del nivel
             const target = this.game?.currentLevel?.targetShape;
             matches = target ? Shapes.matches(item.shape, target) : true;
           }
@@ -1039,13 +1215,9 @@ export class Simulation {
           const nextPiece = this.grid.get(nextX, nextY);
 
           if (nextPiece && this.canAcceptItem(nextPiece, outDir)) {
-            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-            if (!blocked) {
+            if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
               this.totalFiltersProcessed++;
-              item.x = nextX;
-              item.y = nextY;
-              item.inDir = outDir;
-              item.progress = 0.0;
+              this.moveItemToCell(item, nextX, nextY, outDir, nowSec);
               this.triggerMachineAnim(piece.x, piece.y, 'filter_pulse', { dir: outDir, matches });
             } else {
               item.progress = 1.0;
@@ -1060,7 +1232,7 @@ export class Simulation {
       // Cruce (Crossing): autopista de paso recto en la dirección de entrada
       if (piece.type === 'crossing') {
         const trackDir = item.inDir !== undefined ? item.inDir : piece.dir;
-        item.progress += effectiveDt * tileSpeed;
+        item.progress += effectiveDt * tileSpeed * 1.15;
         if (item.progress >= 1.0) {
           const delta = DIR_DELTA[trackDir];
           const nextX = item.x + delta.x;
@@ -1068,13 +1240,9 @@ export class Simulation {
           const nextPiece = this.grid.get(nextX, nextY);
 
           if (nextPiece && this.canAcceptItem(nextPiece, trackDir)) {
-            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-            if (!blocked) {
+            if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
               this.totalCrossingsTraversed++;
-              item.x = nextX;
-              item.y = nextY;
-              item.inDir = trackDir;
-              item.progress = 0.0;
+              this.moveItemToCell(item, nextX, nextY, trackDir, nowSec);
             } else {
               item.progress = 1.0;
             }
@@ -1104,22 +1272,18 @@ export class Simulation {
 
         if (piece.bufferQueue.length > 0 && piece.bufferQueue[0] === item) {
           piece.ejectTimer = (piece.ejectTimer || 0) + effectiveDt;
-          if (piece.ejectTimer >= 0.6) {
+          if (piece.ejectTimer >= 0.5) {
             const delta = DIR_DELTA[piece.dir];
             const nextX = piece.x + delta.x;
             const nextY = piece.y + delta.y;
             const nextPiece = this.grid.get(nextX, nextY);
 
             if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-              const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-              if (!blocked) {
+              if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
                 piece.ejectTimer = 0;
                 piece.bufferQueue.shift();
                 item.isBuffered = false;
-                item.x = nextX;
-                item.y = nextY;
-                item.inDir = piece.dir;
-                item.progress = 0.0;
+                this.moveItemToCell(item, nextX, nextY, piece.dir, nowSec);
                 this.triggerMachineAnim(piece.x, piece.y, 'buffer_eject', { dir: piece.dir });
               }
             }
@@ -1153,13 +1317,9 @@ export class Simulation {
           const nextPiece = this.grid.get(nextX, nextY);
 
           if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-            const blocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-            if (!blocked) {
-              item.x = nextX;
-              item.y = nextY;
-              item.inDir = piece.dir;
-              item.progress = 0.0;
+            if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
               item.hasTeleported = false;
+              this.moveItemToCell(item, nextX, nextY, piece.dir, nowSec);
             } else {
               item.progress = 1.0;
             }
@@ -1170,7 +1330,7 @@ export class Simulation {
         continue;
       }
 
-      // Cinta transportadora (estándar, rápida, lenta u oscilante)
+      // Cinta transportadora (estándar, rápida, hiper MK3, lenta u oscilante)
       const nextItem = this.findItemAhead(item);
       const maxProgress = nextItem ? Math.max(0, nextItem.progress - 0.45) : 1.0;
 
@@ -1185,13 +1345,8 @@ export class Simulation {
         const nextPiece = this.grid.get(nextX, nextY);
 
         if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-          const destBlocked = this.items.some(it => it.x === nextX && it.y === nextY && it.progress < 0.35);
-          if (!destBlocked) {
-            item.x = nextX;
-            item.y = nextY;
-            item.inDir = piece.dir;
-            item.progress = 0.0;
-            item.processingTimer = 0;
+          if (!this.isCellEntryBlocked(nextX, nextY, 0.35)) {
+            this.moveItemToCell(item, nextX, nextY, piece.dir, nowSec);
           }
         }
       }
@@ -1206,25 +1361,25 @@ export class Simulation {
   canAcceptItem(piece, incomingDir) {
     if (!piece) return false;
     if (piece.type === 'obstacle' || piece.type === 'rock') return false;
-    if (piece.type === 'water') return false; // El agua solo se cruza por puente/cruce o túnel
+    if (piece.type === 'water') return false;
     if (piece.type === 'spawner' || piece.type === 'extractor') return false;
     if (piece.type === 'trash' || piece.type === 'delivery') return true;
 
-    // Fábricas de la Expansión Biomolecular & Cuántica (DLC)
-    if (piece.type === 'factory_1x1') {
-      return incomingDir !== piece.dir; // Admite entradas por detrás y laterales (no por la salida)
+    // Fábricas y Cross-Hub
+    if (piece.type === 'factory_1x1' || piece.type === 'cross_hub') {
+      return incomingDir !== OPPOSITE_DIR[piece.dir]; // Admite por detrás y ambos laterales
     }
     if (piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part') {
-      return true; // Admite múltiples entradas perimetrales
+      return true;
     }
 
-    // Cintas (estándar, rápida, lenta y oscilante)
-    if (piece.type === 'belt' || piece.type === 'belt_fast' || piece.type === 'belt_slow' || piece.type === 'switching_belt') {
+    // Cintas (estándar, rápida, hiper MK3, lenta y oscilante)
+    if (piece.type === 'belt' || piece.type === 'belt_fast' || piece.type === 'belt_hyper' || piece.type === 'belt_slow' || piece.type === 'switching_belt') {
       return piece.dir !== OPPOSITE_DIR[incomingDir];
     }
 
-    // Divisor (Splitter): entrada trasera
-    if (piece.type === 'splitter') {
+    // Divisor (Splitter) y Balanceador 3-Vías (Balancer): entrada trasera
+    if (piece.type === 'splitter' || piece.type === 'balancer') {
       return incomingDir === piece.dir;
     }
 
@@ -1240,47 +1395,47 @@ export class Simulation {
       return incomingDir === piece.dir;
     }
 
-    // Cruce (Crossing): acepta cualquier dirección si la salida recta correspondiente está libre
+    // Cruce (Crossing)
     if (piece.type === 'crossing') {
       const exitDelta = DIR_DELTA[incomingDir];
       const exitPiece = this.grid.get(piece.x + exitDelta.x, piece.y + exitDelta.y);
       return exitPiece ? this.canAcceptItem(exitPiece, incomingDir) : true;
     }
 
-    // Buffer: entrada trasera y capacidad < 6
+    // Buffer
     if (piece.type === 'buffer') {
       const currentQueue = piece.bufferQueue || [];
       return incomingDir === piece.dir && currentQueue.length < 6;
     }
 
-    // Portal: entrada trasera
+    // Portal
     if (piece.type === 'portal') {
       return incomingDir === piece.dir;
     }
 
-    // Cortadora (solo por detrás en celda raíz) y Pintor
+    // Cortadora y Pintor
     if (piece.type === 'cutter' || piece.type === 'painter') {
       return incomingDir === piece.dir;
     }
     if (piece.type === 'cutter_part') {
-      return false; // la celda secundaria es solo salida
+      return false;
     }
 
-    // Fabricador / Mezcladora (acepta por ambos laterales y por detrás)
-    if (piece.type === 'mixer' || piece.type === 'factory_1x1') {
+    // Mezcladora
+    if (piece.type === 'mixer') {
       const leftDir = (piece.dir + 1) % 4;
       const rightDir = (piece.dir + 3) % 4;
       return incomingDir === piece.dir || incomingDir === leftDir || incomingDir === rightDir;
     }
 
-    // Túnel (entrada trasera)
+    // Túnel
     if (piece.type === 'tunnel') {
       return incomingDir === piece.dir;
     }
-
+    return false;
   }
 
-  processMachineOutput(piece, item) {
+  processMachineOutput(piece, item, nowSec = performance.now() / 1000) {
     if (piece.type === 'painter') {
       const paintColor = piece.color || PASTEL_COLORS.LAVENDER;
       const paintedShape = Shapes.paint(item.shape, paintColor);
@@ -1291,13 +1446,14 @@ export class Simulation {
       const nextPiece = this.grid.get(outX, outY);
 
       if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
-        const blocked = this.items.some(it => it.x === outX && it.y === outY && it.progress < 0.35);
-        if (!blocked) {
+        if (!this.isCellEntryBlocked(outX, outY, 0.35)) {
           this.triggerMachineAnim(piece.x, piece.y, 'painter_drop', {
             color: paintColor,
             dir: piece.dir
           });
           this.spawnItem(paintedShape, outX, outY, piece.dir);
+          this.recordNodePass(outX, outY, nowSec);
+          this.rebuildSpatialIndex();
           return true;
         }
       }
@@ -1308,13 +1464,11 @@ export class Simulation {
     if (piece.type === 'cutter') {
       const { leftHalf, rightHalf } = Shapes.cut(item.shape);
 
-      // Salida izquierda: recta hacia piece.dir desde celda raíz (piece.x, piece.y)
       const fDelta = DIR_DELTA[piece.dir];
       const fX = piece.x + fDelta.x;
       const fY = piece.y + fDelta.y;
       const fPiece = this.grid.get(fX, fY);
 
-      // Salida derecha: recta hacia piece.dir desde celda secundaria (secX, secY)
       const rVec = DIR_DELTA[(piece.dir + 1) % 4];
       const secX = piece.x + rVec.x;
       const secY = piece.y + rVec.y;
@@ -1322,13 +1476,20 @@ export class Simulation {
       const rOutY = secY + fDelta.y;
       const rPiece = this.grid.get(rOutX, rOutY);
 
-      const canLeft = !leftHalf || (fPiece && this.canAcceptItem(fPiece, piece.dir) && !this.items.some(it => it.x === fX && it.y === fY && it.progress < 0.35));
-      const canRight = !rightHalf || (rPiece && this.canAcceptItem(rPiece, piece.dir) && !this.items.some(it => it.x === rOutX && it.y === rOutY && it.progress < 0.35));
+      const canLeft = !leftHalf || (fPiece && this.canAcceptItem(fPiece, piece.dir) && !this.isCellEntryBlocked(fX, fY, 0.35));
+      const canRight = !rightHalf || (rPiece && this.canAcceptItem(rPiece, piece.dir) && !this.isCellEntryBlocked(rOutX, rOutY, 0.35));
 
       if (canLeft && canRight) {
         this.triggerMachineAnim(piece.x, piece.y, 'cutter_flash', { dir: piece.dir });
-        if (leftHalf && fPiece) this.spawnItem(leftHalf, fX, fY, piece.dir);
-        if (rightHalf && rPiece) this.spawnItem(rightHalf, rOutX, rOutY, piece.dir);
+        if (leftHalf && fPiece) {
+          this.spawnItem(leftHalf, fX, fY, piece.dir);
+          this.recordNodePass(fX, fY, nowSec);
+        }
+        if (rightHalf && rPiece) {
+          this.spawnItem(rightHalf, rOutX, rOutY, piece.dir);
+          this.recordNodePass(rOutX, rOutY, nowSec);
+        }
+        this.rebuildSpatialIndex();
         return true;
       }
       return false;
@@ -1351,16 +1512,17 @@ export class Simulation {
   }
 
   findItemAhead(item) {
+    const bucket = this.cellItems.get(`${item.x},${item.y}`);
+    if (!bucket || bucket.length <= 1) return null;
     let closest = null;
     let minDist = Infinity;
-    for (const other of this.items) {
-      if (other !== item && other.x === item.x && other.y === item.y) {
-        if (other.progress > item.progress) {
-          const dist = other.progress - item.progress;
-          if (dist < minDist) {
-            minDist = dist;
-            closest = other;
-          }
+    for (let i = 0; i < bucket.length; i++) {
+      const other = bucket[i];
+      if (other !== item && other.progress > item.progress) {
+        const dist = other.progress - item.progress;
+        if (dist < minDist) {
+          minDist = dist;
+          closest = other;
         }
       }
     }
@@ -1368,7 +1530,7 @@ export class Simulation {
   }
 
   spawnItem(shape, x, y, inDir) {
-    this.items.push({
+    const newItem = {
       id: this.nextItemId++,
       shape: shape,
       x: x,
@@ -1377,7 +1539,15 @@ export class Simulation {
       progress: 0.0,
       isUnderground: false,
       processingTimer: 0
-    });
+    };
+    this.items.push(newItem);
+    const k = `${x},${y}`;
+    let bucket = this.cellItems.get(k);
+    if (!bucket) {
+      bucket = [];
+      this.cellItems.set(k, bucket);
+    }
+    bucket.push(newItem);
   }
 }
 
@@ -1398,11 +1568,13 @@ export class Renderer {
 
     this.isDark = false;
     this.reducedMotion = false;
+    this.showIPMOverlay = false;
     this.ghost = null;
     this.particles = [];
     this.ambientParticles = [];
     this.beltAnimOffset = 0;
     this.placementEffects = new Map(); // key -> { startTime, duration, x, y, type }
+    this.frustum = { minCol: -50, maxCol: 50, minRow: -50, maxRow: 50 };
 
     this.initAmbientParticles();
     this.resize();
@@ -1453,10 +1625,13 @@ export class Renderer {
 
   drawAmbientParticles(ctx, biomeIndex) {
     if (this.reducedMotion) return;
+    const isCyber = document.documentElement.getAttribute('data-palette') === 'cyberpunk';
     ctx.save();
     for (const p of this.ambientParticles) {
       let color = 'rgba(245, 208, 97, ';
-      if (biomeIndex === 2) {
+      if (isCyber) {
+        color = 'rgba(56, 189, 248, ';
+      } else if (biomeIndex === 2) {
         color = 'rgba(169, 204, 227, ';
       } else if (biomeIndex === 3) {
         color = 'rgba(201, 182, 228, ';
@@ -1483,7 +1658,7 @@ export class Renderer {
   }
 
   resize() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
     const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     this.width = width;
@@ -1523,6 +1698,9 @@ export class Renderer {
 
   addParticles(screenX, screenY, count = 12, color = '#A8D5BA') {
     if (this.reducedMotion) return;
+    if (this.particles.length > 180) {
+      this.particles.splice(0, count);
+    }
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 2.4 + 1.2;
@@ -1553,13 +1731,20 @@ export class Renderer {
     const biomeIndex = lvlId > 40 ? 3 : (lvlId > 20 ? 2 : 1);
     this.updateAmbientParticles(dt, biomeIndex);
 
-    let bgColor = this.isDark ? '#1B1F24' : '#F2F0EB';
-    if (biomeIndex === 1) {
-      bgColor = this.isDark ? '#19221E' : '#EEF3EE';
-    } else if (biomeIndex === 2) {
-      bgColor = this.isDark ? '#182028' : '#ECF2F6';
-    } else if (biomeIndex === 3) {
-      bgColor = this.isDark ? '#201C26' : '#F3EFF7';
+    const isCyber = document.documentElement.getAttribute('data-palette') === 'cyberpunk';
+    let bgColor = '#FFFFFF';
+    if (this.isDark) {
+      if (isCyber) {
+        bgColor = '#0B0F17';
+      } else if (biomeIndex === 1) {
+        bgColor = '#19221E';
+      } else if (biomeIndex === 2) {
+        bgColor = '#182028';
+      } else if (biomeIndex === 3) {
+        bgColor = '#201C26';
+      } else {
+        bgColor = '#1B1F24';
+      }
     }
 
     ctx.fillStyle = bgColor;
@@ -1569,11 +1754,18 @@ export class Renderer {
     ctx.translate(this.camX, this.camY);
     ctx.scale(this.zoom, this.zoom);
 
+    const minCol = Math.floor(-this.camX / (this.tileSize * this.zoom)) - 2;
+    const maxCol = Math.ceil((this.width - this.camX) / (this.tileSize * this.zoom)) + 2;
+    const minRow = Math.floor(-this.camY / (this.tileSize * this.zoom)) - 2;
+    const maxRow = Math.ceil((this.height - this.camY) / (this.tileSize * this.zoom)) + 2;
+    this.frustum = { minCol, maxCol, minRow, maxRow };
+
     this.drawGrid(ctx);
     this.drawMines(ctx);
     this.drawTunnelGuides(ctx);
 
     for (const piece of this.grid.getAllPieces()) {
+      if (piece.x < minCol || piece.x > maxCol || piece.y < minRow || piece.y > maxRow) continue;
       this.drawPiece(ctx, piece);
     }
 
@@ -1589,6 +1781,11 @@ export class Renderer {
 
     // Indicadores flotantes de demanda sobre los almacenes
     this.drawDeliveryBadges(ctx);
+
+    // Telemetría de flujo IPM por nodo
+    if (this.showIPMOverlay) {
+      this.drawIPMOverlay(ctx);
+    }
 
     // Barras de progreso y avisos de ingredientes flotantes del DLC
     if (QuantumDLC.isEnabled) {
@@ -1606,7 +1803,8 @@ export class Renderer {
       this.game.demoSim.update(dt, 1.0);
     }
 
-    ctx.fillStyle = this.isDark ? '#1B1F24' : '#F2F0EB';
+    const isCyber = document.documentElement.getAttribute('data-palette') === 'cyberpunk';
+    ctx.fillStyle = this.isDark ? (isCyber ? '#0B0F17' : '#1B1F24') : '#FFFFFF';
     ctx.fillRect(0, 0, this.width, this.height);
 
     ctx.save();
@@ -1623,7 +1821,7 @@ export class Renderer {
     ctx.translate(-4.5 * this.tileSize, -2.5 * this.tileSize);
 
     // Cuadrícula sutil
-    const dotColor = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const dotColor = this.isDark ? (isCyber ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.08)') : 'rgba(15, 23, 42, 0.08)';
     ctx.fillStyle = dotColor;
     for (let x = 0; x <= 9; x++) {
       for (let y = 0; y <= 5; y++) {
@@ -1818,13 +2016,75 @@ export class Renderer {
     }
   }
 
+  drawIPMOverlay(ctx) {
+    if (!this.sim) return;
+    const s = this.tileSize;
+    const { minCol, maxCol, minRow, maxRow } = this.frustum;
+
+    ctx.save();
+    ctx.font = '700 9.5px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (const piece of this.grid.getAllPieces()) {
+      if (piece.x < minCol || piece.x > maxCol || piece.y < minRow || piece.y > maxRow) continue;
+      if (piece.type === 'obstacle' || piece.type === 'water' || piece.type === 'cutter_part' || piece.type === 'factory_2x2_part') continue;
+
+      const ipm = this.sim.getNodeIPM(piece.x, piece.y);
+      const isKeyNode = piece.type === 'extractor' || piece.type === 'delivery' || piece.type === 'splitter' || piece.type === 'balancer' || piece.type === 'cross_hub' || piece.type === 'painter' || piece.type === 'cutter' || piece.type === 'factory_1x1' || piece.type === 'factory_2x2';
+
+      if (ipm <= 0 && !isKeyNode) continue;
+
+      const cx = (piece.x + 0.5) * s;
+      const cy = (piece.y + 0.5) * s + s * 0.34;
+      const label = `${ipm}/m`;
+      const pillW = Math.max(32, label.length * 6.2 + 8);
+      const pillH = 14;
+
+      let pillBg = 'rgba(15, 23, 42, 0.85)';
+      let pillBorder = '#38BDF8';
+      let textColor = '#38BDF8';
+
+      if (ipm >= 120) {
+        pillBorder = '#EC4899';
+        textColor = '#F472B6';
+      } else if (ipm >= 50) {
+        pillBorder = '#10B981';
+        textColor = '#34D399';
+      } else if (ipm === 0) {
+        pillBorder = 'rgba(148, 163, 184, 0.4)';
+        textColor = '#94A3B8';
+      }
+
+      ctx.fillStyle = pillBg;
+      ctx.strokeStyle = pillBorder;
+      ctx.lineWidth = 1;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(cx - pillW / 2, cy - pillH / 2, pillW, pillH, 4);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(cx - pillW / 2, cy - pillH / 2, pillW, pillH);
+      }
+
+      ctx.fillStyle = textColor;
+      ctx.fillText(label, cx, cy + 0.5);
+    }
+
+    ctx.restore();
+  }
+
   drawGrid(ctx) {
     const startCol = Math.floor(-this.camX / (this.tileSize * this.zoom)) - 1;
     const endCol = Math.ceil((this.width - this.camX) / (this.tileSize * this.zoom)) + 1;
     const startRow = Math.floor(-this.camY / (this.tileSize * this.zoom)) - 1;
     const endRow = Math.ceil((this.height - this.camY) / (this.tileSize * this.zoom)) + 1;
 
-    const dotColor = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const isCyber = document.documentElement.getAttribute('data-palette') === 'cyberpunk';
+    const dotColor = this.isDark
+      ? (isCyber ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.08)')
+      : (isCyber ? 'rgba(14, 165, 233, 0.15)' : 'rgba(15, 23, 42, 0.08)');
     ctx.fillStyle = dotColor;
 
     for (let x = startCol; x <= endCol; x++) {
@@ -1925,11 +2185,17 @@ export class Renderer {
       case 'belt_fast':
         this.renderFastBeltTile(ctx, piece, s);
         break;
+      case 'belt_hyper':
+        this.renderHyperBeltTile(ctx, piece, s);
+        break;
       case 'belt_slow':
         this.renderSlowBeltTile(ctx, piece, s);
         break;
       case 'splitter':
         this.renderSplitterTile(ctx, piece, s);
+        break;
+      case 'balancer':
+        this.renderBalancerTile(ctx, piece, s);
         break;
       case 'merger':
         this.renderMergerTile(ctx, piece, s);
@@ -1939,6 +2205,9 @@ export class Renderer {
         break;
       case 'crossing':
         this.renderCrossingTile(ctx, piece, s);
+        break;
+      case 'cross_hub':
+        this.renderCrossHubTile(ctx, piece, s);
         break;
       case 'buffer':
         this.renderBufferTile(ctx, piece, s);
@@ -1995,6 +2264,104 @@ export class Renderer {
     ctx.restore();
   }
 
+  detectBeltNeighborhood(piece) {
+    let isLeftCurve = false;
+    let isRightCurve = false;
+    let hasBackInput = false;
+    let hasFrontOutput = false;
+
+    if (piece && piece.x !== undefined && piece.y !== undefined) {
+      const dir = piece.dir || 0;
+      const backDelta = DIR_DELTA[OPPOSITE_DIR[dir]];
+      const backPiece = this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y);
+      hasBackInput = !!(backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir);
+
+      const frontDelta = DIR_DELTA[dir];
+      const frontPiece = this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y);
+      hasFrontOutput = !!(frontPiece && frontPiece.type !== 'obstacle');
+
+      if (!hasBackInput) {
+        const leftDelta = DIR_DELTA[(dir + 3) % 4];
+        const leftPiece = this.grid.get(piece.x + leftDelta.x, piece.y + leftDelta.y);
+        const hasLeftInput = leftPiece && leftPiece.type !== 'obstacle' && leftPiece.dir === (dir + 1) % 4;
+
+        const rightDelta = DIR_DELTA[(dir + 1) % 4];
+        const rightPiece = this.grid.get(piece.x + rightDelta.x, piece.y + rightDelta.y);
+        const hasRightInput = rightPiece && rightPiece.type !== 'obstacle' && rightPiece.dir === (dir + 3) % 4;
+
+        if (hasLeftInput && !hasRightInput) {
+          isLeftCurve = true;
+        } else if (hasRightInput && !hasLeftInput) {
+          isRightCurve = true;
+        }
+      }
+    }
+    return { isLeftCurve, isRightCurve, hasBackInput, hasFrontOutput };
+  }
+
+  drawBeltTrackAndChevrons(ctx, piece, s, baseDark1, baseDark2, baseLight1, baseLight2, trackColor, arrowColor, speedMult = 1.0, count = 3) {
+    const { isLeftCurve, isRightCurve, hasBackInput, hasFrontOutput } = this.detectBeltNeighborhood(piece);
+    const animOffset = (this.beltAnimOffset * speedMult) % 1.0;
+
+    if (isLeftCurve || isRightCurve) {
+      this.drawTileBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, 6);
+      ctx.strokeStyle = trackColor;
+      ctx.lineWidth = s * 0.56;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      if (isLeftCurve) {
+        ctx.arc(s / 2, -s / 2, s / 2, Math.PI, Math.PI / 2, true);
+      } else {
+        ctx.arc(s / 2, s / 2, s / 2, Math.PI, 3 * Math.PI / 2, false);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (let i = 0; i < count; i++) {
+        const offset = ((i / count) + animOffset) % 1.0;
+        const ang = isLeftCurve ? (Math.PI - offset * (Math.PI / 2)) : (Math.PI + offset * (Math.PI / 2));
+        const ax = s / 2 + Math.cos(ang) * (s / 2);
+        const ay = (isLeftCurve ? -s / 2 : s / 2) + Math.sin(ang) * (s / 2);
+        const tang = isLeftCurve ? (ang - Math.PI / 2) : (ang + Math.PI / 2);
+
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(tang);
+        ctx.beginPath();
+        ctx.moveTo(-5, -s * 0.18);
+        ctx.lineTo(2, 0);
+        ctx.lineTo(-5, s * 0.18);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      this.drawBeltBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, hasBackInput, hasFrontOutput);
+
+      const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
+      const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
+
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (let i = 0; i < count; i++) {
+        const offset = ((i / count) + animOffset) % 1.0;
+        const x = -s / 2 + offset * s;
+        ctx.beginPath();
+        ctx.moveTo(x - 5, -s * 0.18);
+        ctx.lineTo(x + 2, 0);
+        ctx.lineTo(x - 5, s * 0.18);
+        ctx.stroke();
+      }
+    }
+  }
+
   renderBeltTile(ctx, piece, s) {
     const skin = this.game?.saveData?.cosmetics?.beltSkin || 'default';
     let baseDark1 = '#2B323D', baseDark2 = '#222730';
@@ -2022,132 +2389,14 @@ export class Renderer {
       baseDark1 = '#363023'; baseDark2 = '#292419';
       trackColor = this.isDark ? '#4D422C' : '#E8D7B0';
       arrowColor = this.isDark ? '#F59E0B' : '#B45309';
+    } else if (skin === 'skin_plasma') {
+      baseLight1 = '#F3E8FF'; baseLight2 = '#E9D5FF';
+      baseDark1 = '#2E1065'; baseDark2 = '#1E1B4B';
+      trackColor = this.isDark ? '#3B0764' : '#D8B4FE';
+      arrowColor = this.isDark ? '#F472B6' : '#9333EA';
     }
 
-    this.drawTileBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, 6);
-
-    // Detectar si la cinta es una curva inspeccionando vecinos
-    let isLeftCurve = false;
-    let isRightCurve = false;
-
-    if (piece && piece.x !== undefined && piece.y !== undefined) {
-      const dir = piece.dir || 0;
-      const backDelta = DIR_DELTA[OPPOSITE_DIR[dir]];
-      const backPiece = this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y);
-      const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
-
-      if (!hasBackInput) {
-        // Comprobar entrada por la izquierda relativa (dir + 3) % 4
-        const leftDelta = DIR_DELTA[(dir + 3) % 4];
-        const leftPiece = this.grid.get(piece.x + leftDelta.x, piece.y + leftDelta.y);
-        const hasLeftInput = leftPiece && leftPiece.type !== 'obstacle' && leftPiece.dir === (dir + 1) % 4;
-
-        // Comprobar entrada por la derecha relativa (dir + 1) % 4
-        const rightDelta = DIR_DELTA[(dir + 1) % 4];
-        const rightPiece = this.grid.get(piece.x + rightDelta.x, piece.y + rightDelta.y);
-        const hasRightInput = rightPiece && rightPiece.type !== 'obstacle' && rightPiece.dir === (dir + 3) % 4;
-
-        if (hasLeftInput && !hasRightInput) {
-          isLeftCurve = true;
-        } else if (hasRightInput && !hasLeftInput) {
-          isRightCurve = true;
-        }
-      }
-    }
-
-    if (isLeftCurve) {
-      // Curva desde la izquierda relativa (arriba en espacio local: -Y hacia +X)
-      ctx.strokeStyle = trackColor;
-      ctx.lineWidth = s * 0.56;
-      ctx.lineCap = 'butt';
-      ctx.beginPath();
-      ctx.arc(s / 2, -s / 2, s / 2, Math.PI, Math.PI / 2, true);
-      ctx.stroke();
-
-      // Flechas animadas a lo largo del arco
-      ctx.strokeStyle = arrowColor;
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      const count = 3;
-      for (let i = 0; i < count; i++) {
-        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
-        const ang = Math.PI - offset * (Math.PI / 2);
-        const ax = s / 2 + Math.cos(ang) * (s / 2);
-        const ay = -s / 2 + Math.sin(ang) * (s / 2);
-        const tang = ang - Math.PI / 2;
-
-        ctx.save();
-        ctx.translate(ax, ay);
-        ctx.rotate(tang);
-        ctx.beginPath();
-        ctx.moveTo(-5, -s * 0.18);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(-5, s * 0.18);
-        ctx.stroke();
-        ctx.restore();
-      }
-    } else if (isRightCurve) {
-      // Curva desde la derecha relativa (abajo en espacio local: +Y hacia +X)
-      ctx.strokeStyle = trackColor;
-      ctx.lineWidth = s * 0.56;
-      ctx.lineCap = 'butt';
-      ctx.beginPath();
-      ctx.arc(s / 2, s / 2, s / 2, Math.PI, 3 * Math.PI / 2, false);
-      ctx.stroke();
-
-      // Flechas animadas a lo largo del arco
-      ctx.strokeStyle = arrowColor;
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      const count = 3;
-      for (let i = 0; i < count; i++) {
-        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
-        const ang = Math.PI + offset * (Math.PI / 2);
-        const ax = s / 2 + Math.cos(ang) * (s / 2);
-        const ay = s / 2 + Math.sin(ang) * (s / 2);
-        const tang = ang + Math.PI / 2;
-
-        ctx.save();
-        ctx.translate(ax, ay);
-        ctx.rotate(tang);
-        ctx.beginPath();
-        ctx.moveTo(-5, -s * 0.18);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(-5, s * 0.18);
-        ctx.stroke();
-        ctx.restore();
-      }
-    } else {
-      // Cinta recta estándar conectada
-      const frontDelta = DIR_DELTA[dir];
-      const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
-      const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
-
-      this.drawBeltBase(ctx, s, baseDark1, baseDark2, baseLight1, baseLight2, hasBackInput, hasFrontOutput);
-
-      const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
-      const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
-      ctx.fillStyle = trackColor;
-      ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
-
-      ctx.strokeStyle = arrowColor;
-      ctx.lineWidth = 2.2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      const count = 3;
-      for (let i = 0; i < count; i++) {
-        const offset = ((i / count) + this.beltAnimOffset) % 1.0;
-        const x = -s / 2 + offset * s;
-        ctx.beginPath();
-        ctx.moveTo(x - 5, -s * 0.18);
-        ctx.lineTo(x + 2, 0);
-        ctx.lineTo(x - 5, s * 0.18);
-        ctx.stroke();
-      }
-    }
+    this.drawBeltTrackAndChevrons(ctx, piece, s, baseDark1, baseDark2, baseLight1, baseLight2, trackColor, arrowColor, 1.0, 3);
   }
 
   // Base unificada continua para cintas que conecta casillas consecutivas sin separaciones
@@ -2434,77 +2683,31 @@ export class Renderer {
   }
 
   renderFastBeltTile(ctx, piece, s) {
-    const dir = piece?.dir || 0;
-    const backDelta = DIR_DELTA[(dir + 2) % 4];
-    const backPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y) : null;
-    const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
-
-    const frontDelta = DIR_DELTA[dir];
-    const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
-    const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
-
-    this.drawBeltBase(ctx, s, '#1D2F38', '#142229', '#E0F2FE', '#BAE6FD', hasBackInput, hasFrontOutput);
     const trackColor = this.isDark ? '#1E3A4B' : '#BAE6FD';
     const arrowColor = this.isDark ? '#38BDF8' : '#0284C7';
+    this.drawBeltTrackAndChevrons(ctx, piece, s, '#1D2F38', '#142229', '#E0F2FE', '#BAE6FD', trackColor, arrowColor, 2.0, 4);
+  }
 
-    const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
-    const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
-    ctx.fillStyle = trackColor;
-    ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
+  renderHyperBeltTile(ctx, piece, s) {
+    const trackColor = this.isDark ? '#311042' : '#F3E8FF';
+    const arrowColor = this.isDark ? '#F472B6' : '#DB2777';
+    this.drawBeltTrackAndChevrons(ctx, piece, s, '#240B36', '#150621', '#FAE8FF', '#F5D0FE', trackColor, arrowColor, 3.2, 5);
 
-    ctx.strokeStyle = arrowColor;
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const count = 4;
-    const fastOffset = (this.beltAnimOffset * 2.2) % 1.0;
-    for (let i = 0; i < count; i++) {
-      const offset = ((i / count) + fastOffset) % 1.0;
-      const x = -s / 2 + offset * s;
-      ctx.beginPath();
-      ctx.moveTo(x - 6, -s * 0.20);
-      ctx.lineTo(x + 2, 0);
-      ctx.lineTo(x - 6, s * 0.20);
-      ctx.stroke();
-    }
+    // Raíles laterales de neón cian para MK3 Hyper Belt
+    ctx.strokeStyle = this.isDark ? 'rgba(56, 189, 248, 0.65)' : 'rgba(2, 132, 199, 0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-s / 2 + 3, -s * 0.28);
+    ctx.lineTo(s / 2 - 3, -s * 0.28);
+    ctx.moveTo(-s / 2 + 3, s * 0.28);
+    ctx.lineTo(s / 2 - 3, s * 0.28);
+    ctx.stroke();
   }
 
   renderSlowBeltTile(ctx, piece, s) {
-    const dir = piece?.dir || 0;
-    const backDelta = DIR_DELTA[(dir + 2) % 4];
-    const backPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + backDelta.x, piece.y + backDelta.y) : null;
-    const hasBackInput = backPiece && backPiece.type !== 'obstacle' && backPiece.dir === dir;
-
-    const frontDelta = DIR_DELTA[dir];
-    const frontPiece = (piece && piece.x !== undefined) ? this.grid.get(piece.x + frontDelta.x, piece.y + frontDelta.y) : null;
-    const hasFrontOutput = frontPiece && frontPiece.type !== 'obstacle';
-
-    this.drawBeltBase(ctx, s, '#382E26', '#2A221B', '#FDF4EC', '#F4DEC9', hasBackInput, hasFrontOutput);
     const trackColor = this.isDark ? '#4A3B2E' : '#E8CCA8';
     const arrowColor = this.isDark ? '#F59E0B' : '#B45309';
-
-    const trackLeft = hasBackInput ? -s / 2 : -s / 2 + 3;
-    const trackRight = hasFrontOutput ? s / 2 : s / 2 - 3;
-    ctx.fillStyle = trackColor;
-    ctx.fillRect(trackLeft, -s * 0.28, trackRight - trackLeft, s * 0.56);
-
-    ctx.strokeStyle = arrowColor;
-    ctx.lineWidth = 2.0;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const count = 2;
-    const slowOffset = (this.beltAnimOffset * 0.5) % 1.0;
-    for (let i = 0; i < count; i++) {
-      const offset = ((i / count) + slowOffset) % 1.0;
-      const x = -s / 2 + offset * s;
-      ctx.beginPath();
-      ctx.moveTo(x - 4, -s * 0.16);
-      ctx.lineTo(x + 2, 0);
-      ctx.lineTo(x - 4, s * 0.16);
-      ctx.stroke();
-    }
+    this.drawBeltTrackAndChevrons(ctx, piece, s, '#382E26', '#2A221B', '#FDF4EC', '#F4DEC9', trackColor, arrowColor, 0.5, 2);
   }
 
   renderSplitterTile(ctx, piece, s) {
@@ -2512,6 +2715,7 @@ export class Renderer {
 
     const trackColor = this.isDark ? '#2E473F' : '#BFE3D4';
     const arrowColor = this.isDark ? '#A8D5BA' : '#2D8A5B';
+    const prioMode = piece?.priorityMode || 'balanced';
 
     // Canal central y ramales
     ctx.fillStyle = trackColor;
@@ -2519,18 +2723,18 @@ export class Renderer {
     ctx.fillRect(0, -s * 0.20, s / 2 - 4, s * 0.40);
     ctx.fillRect(-s * 0.20, 0, s * 0.40, s / 2 - 4);
 
-    // Separador central
-    ctx.fillStyle = arrowColor;
+    // Separador central (cambia de color según prioridad)
+    ctx.fillStyle = prioMode === 'balanced' ? arrowColor : '#F59E0B';
     ctx.beginPath();
-    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 4.8, 0, Math.PI * 2);
     ctx.fill();
 
     // Flechas indicadoras de salida
-    ctx.strokeStyle = arrowColor;
-    ctx.lineWidth = 2.0;
+    ctx.lineWidth = 2.2;
     ctx.lineCap = 'round';
 
     // Flecha recta
+    ctx.strokeStyle = prioMode === 'priority_main' ? '#F59E0B' : arrowColor;
     ctx.beginPath();
     ctx.moveTo(s * 0.22, -s * 0.12);
     ctx.lineTo(s * 0.36, 0);
@@ -2538,11 +2742,115 @@ export class Renderer {
     ctx.stroke();
 
     // Flecha lateral
+    ctx.strokeStyle = prioMode === 'priority_side' ? '#F59E0B' : arrowColor;
     ctx.beginPath();
     ctx.moveTo(-s * 0.12, s * 0.22);
     ctx.lineTo(0, s * 0.36);
     ctx.lineTo(s * 0.12, s * 0.22);
     ctx.stroke();
+  }
+
+  renderBalancerTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#1B2E3C', '#12202B', '#E0F2FE', '#BAE6FD', 8);
+
+    const trackColor = this.isDark ? '#223D50' : '#93C5FD';
+    const accentColor = this.isDark ? '#38BDF8' : '#0284C7';
+
+    // Entrada trasera + 3 salidas (frontal, izquierda -Y, derecha +Y)
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 4, -s * 0.18, s - 8, s * 0.36);
+    ctx.fillRect(-s * 0.18, -s / 2 + 4, s * 0.36, s - 8);
+
+    // Núcleo giratorio de 3 vías
+    const rot = (performance.now() * 0.0025) % (Math.PI * 2);
+    ctx.save();
+    ctx.rotate(rot);
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3 Flechas de salida (Frontal +X, Izquierda -Y, Derecha +Y)
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
+
+    // Frontal
+    ctx.beginPath();
+    ctx.moveTo(s * 0.24, -4);
+    ctx.lineTo(s * 0.36, 0);
+    ctx.lineTo(s * 0.24, 4);
+    ctx.stroke();
+
+    // Izquierda (-Y)
+    ctx.beginPath();
+    ctx.moveTo(-4, -s * 0.24);
+    ctx.lineTo(0, -s * 0.36);
+    ctx.lineTo(4, -s * 0.24);
+    ctx.stroke();
+
+    // Derecha (+Y)
+    ctx.beginPath();
+    ctx.moveTo(-4, s * 0.24);
+    ctx.lineTo(0, s * 0.36);
+    ctx.lineTo(4, s * 0.24);
+    ctx.stroke();
+  }
+
+  renderCrossHubTile(ctx, piece, s) {
+    this.drawTileBase(ctx, s, '#2D1F3D', '#1D1429', '#F3E8FF', '#E9D5FF', 9);
+
+    const colorHex = COLOR_HEX[piece.color || 'lavender'] || '#C9B6E4';
+    const trackColor = this.isDark ? '#3D2952' : '#D8B4FE';
+
+    // Entrada trasera (-X) y entrada izquierda (-Y) -> Salida frontal (+X)
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(-s / 2 + 3, -s * 0.20, s - 6, s * 0.40);
+    ctx.fillRect(-s * 0.20, -s / 2 + 3, s * 0.40, s * 0.55);
+
+    // Anillo reactor híbrido (fusión + pigmento)
+    const pulse = 1.0 + Math.sin(performance.now() * 0.004) * 0.08;
+    ctx.fillStyle = this.isDark ? '#140E1D' : '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = colorHex;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.26 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Símbolo de fusión cruzada en el centro
+    ctx.fillStyle = colorHex;
+    ctx.beginPath();
+    ctx.arc(-3, 0, 3.2, 0, Math.PI * 2);
+    ctx.arc(3, 0, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Indicador de pieza en espera si tiene heldLeft o heldRight
+    if (piece.heldLeft || piece.heldRight) {
+      ctx.fillStyle = '#34D399';
+      ctx.beginPath();
+      ctx.arc(-s * 0.28, -s * 0.28, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Boquilla de salida frontal
+    ctx.fillStyle = colorHex;
+    ctx.beginPath();
+    ctx.moveTo(s / 2 - 8, -5);
+    ctx.lineTo(s / 2 - 2, 0);
+    ctx.lineTo(s / 2 - 8, 5);
+    ctx.closePath();
+    ctx.fill();
   }
 
   renderMergerTile(ctx, piece, s) {
@@ -2883,6 +3191,7 @@ export class Renderer {
     switch (ghost.type) {
       case 'belt':
       case 'belt_fast':
+      case 'belt_hyper':
       case 'belt_slow':
         ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
         ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
@@ -2906,6 +3215,12 @@ export class Renderer {
 
       case 'painter':
         ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        break;
+
+      case 'cross_hub':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: false });
         ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
         break;
 
@@ -2935,6 +3250,13 @@ export class Renderer {
       case 'splitter':
         ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
         ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: true });
+        break;
+
+      case 'balancer':
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: true });
         ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: true });
         break;
 
@@ -3008,9 +3330,13 @@ export class Renderer {
   drawItems(ctx, customItems = null) {
     const s = this.tileSize;
     const items = customItems || this.sim.items;
+    const useFrustum = !customItems && this.frustum;
 
     for (const item of items) {
       if (item.isUnderground) continue;
+      if (useFrustum && (item.x < this.frustum.minCol || item.x > this.frustum.maxCol || item.y < this.frustum.minRow || item.y > this.frustum.maxRow)) {
+        continue;
+      }
 
       const piece = (customItems && this.game.demoGrid) ? this.game.demoGrid.get(item.x, item.y) : this.grid.get(item.x, item.y);
       if (!piece) continue;
@@ -3019,11 +3345,12 @@ export class Renderer {
       const cy = (item.y + 0.5) * s;
       const inDir = item.inDir !== undefined ? item.inDir : piece.dir;
       const outDir = piece.dir;
+      const isBeltTier = piece.type === 'belt' || piece.type === 'belt_fast' || piece.type === 'belt_hyper' || piece.type === 'belt_slow';
 
       let drawX = cx;
       let drawY = cy;
 
-      if (inDir === outDir || piece.type !== 'belt') {
+      if (inDir === outDir || !isBeltTier) {
         const inDelta = DIR_DELTA[inDir];
         const startX = cx - inDelta.x * s * 0.5;
         const startY = cy - inDelta.y * s * 0.5;
@@ -3059,7 +3386,7 @@ export class Renderer {
       ctx.translate(drawX, drawY);
 
       // Centrifugado / bob en curvas
-      if (inDir !== outDir && piece.type === 'belt') {
+      if (inDir !== outDir && isBeltTier) {
         const bob = Math.sin(item.progress * Math.PI) * 0.12;
         ctx.scale(1 + bob, 1 - bob * 0.5);
         ctx.rotate((item.progress - 0.5) * 0.22);
@@ -3233,10 +3560,16 @@ export class InputManager {
     this.activePointers = new Map();
     this.initialPinchDistance = 0;
     this.initialPinchZoom = 1.0;
+    this.lastPinchMidX = 0;
+    this.lastPinchMidY = 0;
     this.longPressTimer = null;
     this.longPressTriggered = false;
 
     this.bindEvents();
+  }
+
+  isBeltTool(tool) {
+    return tool === 'belt' || tool === 'belt_fast' || tool === 'belt_hyper' || tool === 'belt_slow';
   }
 
   bindEvents() {
@@ -3310,7 +3643,7 @@ export class InputManager {
         }, 380);
 
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
-        if (this.game.selectedTool === 'belt') {
+        if (this.isBeltTool(this.game.selectedTool)) {
           this.game.handleBeltPlacement(pos.gridX, pos.gridY);
           this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
         }
@@ -3319,7 +3652,7 @@ export class InputManager {
         if (e.button === 2 || this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else if (e.button === 0) {
-          if (this.game.selectedTool === 'belt') {
+          if (this.isBeltTool(this.game.selectedTool)) {
             this.game.handleBeltPlacement(pos.gridX, pos.gridY);
             this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
           } else {
@@ -3329,11 +3662,13 @@ export class InputManager {
         }
       }
     } else if (this.activePointers.size === 2) {
-      // Gesto de pinza táctil para zoom
+      // Gesto de pinza táctil para zoom + paneo con 2 dedos
       clearTimeout(this.longPressTimer);
       const points = Array.from(this.activePointers.values());
       this.initialPinchDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
       this.initialPinchZoom = this.game.renderer.zoom;
+      this.lastPinchMidX = (points[0].x + points[1].x) / 2;
+      this.lastPinchMidY = (points[0].y + points[1].y) / 2;
     }
   }
 
@@ -3348,14 +3683,24 @@ export class InputManager {
     this.lastHoverGrid = { x: pos.gridX, y: pos.gridY };
     this.game.updateGhost(pos.gridX, pos.gridY);
 
-    // Zoom por pinza táctil (2 dedos)
+    // Zoom por pinza táctil y paneo simultáneo (2 dedos)
     if (this.activePointers.size === 2) {
       const points = Array.from(this.activePointers.values());
       const currentDist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      const midX = (points[0].x + points[1].x) / 2;
+      const midY = (points[0].y + points[1].y) / 2;
+
+      if (this.lastPinchMidX && this.lastPinchMidY) {
+        this.game.renderer.camX += (midX - this.lastPinchMidX);
+        this.game.renderer.camY += (midY - this.lastPinchMidY);
+      }
+
       if (this.initialPinchDistance > 0) {
         const factor = currentDist / this.initialPinchDistance;
-        this.game.setZoom(this.initialPinchZoom * factor, (points[0].x + points[1].x) / 2, (points[0].y + points[1].y) / 2);
+        this.game.setZoom(this.initialPinchZoom * factor, midX, midY);
       }
+      this.lastPinchMidX = midX;
+      this.lastPinchMidY = midY;
       return;
     }
 
@@ -3399,8 +3744,8 @@ export class InputManager {
 
     // MODO EDICIÓN
     if (e.pointerType === 'touch') {
-      if (this.game.selectedTool === 'belt') {
-        // En táctil con herramienta de cinta: trazo continuo con curvas automáticas
+      if (this.isBeltTool(this.game.selectedTool)) {
+        // En táctil con cualquier herramienta de cinta: trazo continuo con curvas automáticas
         if (!this.lastPlacedCell) {
           this.game.handleBeltPlacement(pos.gridX, pos.gridY);
           this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
@@ -3423,7 +3768,7 @@ export class InputManager {
       if (e.buttons === 1 && !this.longPressTriggered) {
         if (this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
-        } else if (this.game.selectedTool === 'belt') {
+        } else if (this.isBeltTool(this.game.selectedTool)) {
           // Trazar cintas continuas con curvado automático de esquinas
           if (!this.lastPlacedCell) {
             this.game.handleBeltPlacement(pos.gridX, pos.gridY);
@@ -3480,20 +3825,21 @@ export class InputManager {
           if (clickedPiece) {
             if (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part') {
               this.game.ui.openMachineSidebar(clickedPiece);
-            } else if (clickedPiece.type === 'painter') {
+            } else if (clickedPiece.type === 'painter' || clickedPiece.type === 'cross_hub') {
               this.game.ui.openPainterSidebar(clickedPiece);
+            } else if (clickedPiece.type === 'splitter') {
+              this.game.ui.openSplitterSidebar(clickedPiece);
             }
           }
         } else if (this.game.mode === 'edit' && e.pointerType === 'touch') {
           // En modo edición táctil: colocar o borrar piezas
           if (this.game.selectedTool === 'erase') {
             this.game.removePieceAt(pos.gridX, pos.gridY);
-          } else if (this.game.selectedTool === 'belt') {
+          } else if (this.isBeltTool(this.game.selectedTool)) {
             if (!this.lastPlacedCell) {
               this.game.handleBeltPlacement(pos.gridX, pos.gridY);
             }
           } else {
-            // Permitir colocar todas las herramientas en táctil
             this.game.placePieceAt(pos.gridX, pos.gridY);
           }
         }
@@ -3548,6 +3894,12 @@ export class InputManager {
       return;
     }
 
+    // Tecla I para alternar telemetría IPM en vivo
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'i' || e.key === 'I')) {
+      this.game.toggleIPMOverlay();
+      return;
+    }
+
     // Tecla Q para alternar entre Modo Vista y Modo Edición
     if (e.key === 'q' || e.key === 'Q') {
       this.game.toggleMode();
@@ -3566,7 +3918,7 @@ export class InputManager {
     }
 
     // Herramientas avanzadas:
-    // Shift+1 o ! -> Cinta Rápida
+    // Shift+1 o ! -> Cinta Rápida MK2
     if (e.shiftKey && (e.key === '1' || e.key === '!')) {
       if (this.game.mode === 'view') this.game.toggleMode();
       this.game.selectTool('belt_fast');
@@ -3577,6 +3929,24 @@ export class InputManager {
       e.preventDefault();
       if (this.game.mode === 'view') this.game.toggleMode();
       this.game.selectTool('belt_slow');
+      return;
+    }
+    // Tecla H -> Cinta Hiper MK3
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'h' || e.key === 'H')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('belt_hyper');
+      return;
+    }
+    // Tecla G -> Balanceador Triple (1:3)
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'g' || e.key === 'G')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('balancer');
+      return;
+    }
+    // Tecla K -> Hub Cruzado (Fusión + Pintura)
+    if (!e.ctrlKey && !e.metaKey && (e.key === 'k' || e.key === 'K')) {
+      if (this.game.mode === 'view') this.game.toggleMode();
+      this.game.selectTool('cross_hub');
       return;
     }
 
@@ -3624,15 +3994,18 @@ export class InputManager {
       return;
     }
 
-    // Interacción y cambio de receta o color (Tecla E) sobre máquina o pintor con el ratón encima (hover SIN clic)
+    // Interacción y cambio de receta, prioridad o color (Tecla E) sobre máquina con el ratón encima
     if (!e.ctrlKey && !e.metaKey && (e.key === 'e' || e.key === 'E')) {
       if (this.lastHoverGrid) {
         const piece = this.game.grid.get(this.lastHoverGrid.x, this.lastHoverGrid.y);
         if (piece && (piece.type === 'factory_1x1' || piece.type === 'factory_2x2' || piece.type === 'factory_2x2_part')) {
           this.game.ui.openMachineSidebar(piece);
           return;
-        } else if (piece && piece.type === 'painter') {
+        } else if (piece && (piece.type === 'painter' || piece.type === 'cross_hub')) {
           this.game.ui.openPainterSidebar(piece);
+          return;
+        } else if (piece && piece.type === 'splitter') {
+          this.game.ui.openSplitterSidebar(piece);
           return;
         }
       }
@@ -3640,8 +4013,11 @@ export class InputManager {
       if (this.game.selectedTool === 'factory_1x1' || this.game.selectedTool === 'factory_2x2') {
         this.game.ui.openMachineSidebar(null);
         return;
-      } else if (this.game.selectedTool === 'painter') {
+      } else if (this.game.selectedTool === 'painter' || this.game.selectedTool === 'cross_hub') {
         this.game.ui.openPainterSidebar(null);
+        return;
+      } else if (this.game.selectedTool === 'splitter') {
+        this.game.ui.openSplitterSidebar(null);
         return;
       }
     }
@@ -3842,6 +4218,30 @@ export class UIManager {
         this.populateLevelsGrid();
       });
     }
+    const tab5 = document.getElementById('tab-chapter-5');
+    if (tab5) {
+      tab5.addEventListener('click', () => {
+        this.activeChapter = 5;
+        this.populateLevelsGrid();
+      });
+    }
+
+    // Toggle de telemetría IPM en tiempo real
+    document.getElementById('btn-ipm-toggle')?.addEventListener('click', () => {
+      this.game.toggleIPMOverlay();
+    });
+
+    // Pestañas de filtro de categoría en la barra de herramientas inferior
+    const catBtns = document.querySelectorAll('.toolbar-cat-btn[data-cat]');
+    catBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        catBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.activeToolCategory = btn.dataset.cat || 'all';
+        this.filterToolbarByCategory(this.activeToolCategory);
+        this.game.audio?.playTone?.(540, 'sine', 0.04, 0.015);
+      });
+    });
 
     // Toggle de la Expansión Biomolecular & Cuántica (DLC)
     document.getElementById('btn-dlc-toggle')?.addEventListener('click', () => {
@@ -3860,8 +4260,11 @@ export class UIManager {
         this.openMachineSidebar(factories[0]);
       } else if (this.game.selectedTool === 'factory_1x1' || this.game.selectedTool === 'factory_2x2') {
         this.openMachineSidebar(null);
-      } else if (this.game.selectedTool === 'painter') {
+      } else if (this.game.selectedTool === 'painter' || this.game.selectedTool === 'cross_hub') {
         this.openPainterSidebar(null);
+      } else if (this.game.selectedTool === 'splitter') {
+        const splitters = this.game.grid.getAllPieces().filter(p => p.type === 'splitter');
+        this.openSplitterSidebar(splitters[0] || null);
       } else {
         this.openMachineSidebar(null);
       }
@@ -3899,11 +4302,26 @@ export class UIManager {
       this.toggleVictoryModal(false);
       this.game.loadNextLevel();
     });
-    document.getElementById('btn-reset-save')?.addEventListener('click', () => {
-      if (confirm("¿Estás seguro de que deseas reiniciar todo el progreso y las mejores marcas guardadas?")) {
-        this.game.resetAllProgress();
-      }
-    });
+    const btnResetSave = document.getElementById('btn-reset-save');
+    if (btnResetSave) {
+      btnResetSave.addEventListener('click', () => {
+        if (btnResetSave.dataset.confirming === 'true') {
+          btnResetSave.dataset.confirming = 'false';
+          btnResetSave.textContent = 'Borrar progreso guardado';
+          this.game.resetAllProgress();
+        } else {
+          btnResetSave.dataset.confirming = 'true';
+          btnResetSave.textContent = '⚠️ Pulsa de nuevo para confirmar';
+          this.showToast("⚠️ Pulsa otra vez para borrar todo el progreso", 2600);
+          setTimeout(() => {
+            if (btnResetSave.dataset.confirming === 'true') {
+              btnResetSave.dataset.confirming = 'false';
+              btnResetSave.textContent = 'Borrar progreso guardado';
+            }
+          }, 3000);
+        }
+      });
+    }
 
     // 3. Pestañas de Ajustes: Juego vs Estética
     const tabCfgGame = document.getElementById('tab-cfg-game');
@@ -3987,7 +4405,7 @@ export class UIManager {
     const hackerUnlockAll = document.getElementById('hacker-btn-unlock-all');
     if (hackerUnlockAll) {
       hackerUnlockAll.addEventListener('click', () => {
-        for (let i = 1; i <= 64; i++) {
+        for (let i = 1; i <= 68; i++) {
           if (!this.game.saveData.nivelesCompletados.includes(i)) {
             this.game.saveData.nivelesCompletados.push(i);
           }
@@ -3996,7 +4414,7 @@ export class UIManager {
         this.game.autoSave();
         this.populateLevelsGrid();
         this.updateMenuStats();
-        this.showToast("⭐ ¡Todos los 64 niveles desbloqueados con 3 estrellas!", 2500);
+        this.showToast("⭐ ¡Todos los 68 niveles desbloqueados con 3 estrellas!", 2500);
         this.toggleHackerModal(false);
       });
     }
@@ -4198,9 +4616,15 @@ export class UIManager {
       }
     });
 
+    if (this.activeToolCategory && this.activeToolCategory !== 'all') {
+      this.filterToolbarByCategory(this.activeToolCategory);
+    }
+
     const colorBar = document.getElementById('painter-color-bar');
     if (colorBar) {
-      if (this.game.selectedTool === 'painter' && tools.includes('painter')) {
+      const isColorTool = (this.game.selectedTool === 'painter' && tools.includes('painter')) ||
+                          (this.game.selectedTool === 'cross_hub' && tools.includes('cross_hub'));
+      if (isColorTool) {
         colorBar.classList.add('visible');
       } else {
         colorBar.classList.remove('visible');
@@ -4217,6 +4641,27 @@ export class UIManager {
         recipeBar.classList.remove('visible');
       }
     }
+  }
+
+  filterToolbarByCategory(cat = 'all') {
+    const logisticsTools = new Set(['belt', 'belt_fast', 'belt_hyper', 'belt_slow', 'tunnel', 'splitter', 'merger', 'balancer', 'crossing', 'filter', 'buffer', 'portal_in', 'portal_out']);
+    const processTools = new Set(['extractor', 'painter', 'cutter', 'rotator', 'mixer', 'cross_hub', 'factory_1x1', 'factory_2x2', 'trash', 'erase']);
+    const cards = document.querySelectorAll('.tool-card');
+    cards.forEach(card => {
+      const tool = card.dataset.tool;
+      const isDlcTool = (tool === 'factory_1x1' || tool === 'factory_2x2');
+      if (isDlcTool && !QuantumDLC.isEnabled && !(this.game.currentLevel?.availableTools || []).includes(tool)) {
+        card.style.display = 'none';
+        return;
+      }
+      if (cat === 'all') {
+        card.style.display = '';
+      } else if (cat === 'logistics') {
+        card.style.display = (logisticsTools.has(tool) || tool === 'erase') ? '' : 'none';
+      } else if (cat === 'process') {
+        card.style.display = processTools.has(tool) ? '' : 'none';
+      }
+    });
   }
 
   setActiveTool(tool) {
@@ -4240,7 +4685,7 @@ export class UIManager {
 
     const colorBar = document.getElementById('painter-color-bar');
     if (colorBar) {
-      if (tool === 'painter') {
+      if (tool === 'painter' || tool === 'cross_hub') {
         colorBar.classList.add('visible');
       } else {
         colorBar.classList.remove('visible');
@@ -4497,6 +4942,7 @@ export class UIManager {
     if (!sidebar) return;
 
     const currentColor = piece ? (piece.color || 'lavender') : (this.game.painterColor || 'lavender');
+    const isCrossHub = piece ? piece.type === 'cross_hub' : this.game.selectedTool === 'cross_hub';
 
     const iconEl = document.getElementById('sidebar-icon');
     const titleEl = document.getElementById('sidebar-title');
@@ -4504,10 +4950,10 @@ export class UIManager {
     const bodyEl = document.getElementById('sidebar-content');
     const presetBtn = document.getElementById('btn-sidebar-set-preset');
 
-    if (iconEl) iconEl.textContent = '🎨';
-    if (titleEl) titleEl.textContent = 'Pintor';
+    if (iconEl) iconEl.textContent = isCrossHub ? '🔮' : '🎨';
+    if (titleEl) titleEl.textContent = isCrossHub ? 'Hub Cruzado (Fusión + Tinte)' : 'Pintor';
     if (subtitleEl) {
-      subtitleEl.textContent = piece ? `Casilla (${piece.x}, ${piece.y})` : 'Color para Nuevos Pintores';
+      subtitleEl.textContent = piece ? `Casilla (${piece.x}, ${piece.y})` : 'Pigmento por Defecto';
     }
 
     if (presetBtn) {
@@ -4530,7 +4976,9 @@ export class UIManager {
 
     let html = `
       <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-        Selecciona el color de pigmento con el que este pintor teñirá las piezas:
+        ${isCrossHub
+          ? 'El Hub Cruzado fusiona la entrada trasera + izquierda y tiñe la pieza compuesta con el pigmento elegido:'
+          : 'Selecciona el color de pigmento con el que este pintor teñirá las piezas:'}
       </div>
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
     `;
@@ -4578,6 +5026,108 @@ export class UIManager {
     sidebar.setAttribute('aria-hidden', 'false');
   }
 
+  openSplitterSidebar(piece = null) {
+    const sidebar = document.getElementById('machine-config-sidebar');
+    if (!sidebar) return;
+
+    const currentMode = piece ? (piece.priorityMode || 'balanced') : (this.game.defaultSplitterMode || 'balanced');
+
+    const iconEl = document.getElementById('sidebar-icon');
+    const titleEl = document.getElementById('sidebar-title');
+    const subtitleEl = document.getElementById('sidebar-subtitle');
+    const bodyEl = document.getElementById('sidebar-content');
+    const presetBtn = document.getElementById('btn-sidebar-set-preset');
+
+    if (iconEl) iconEl.textContent = '🔀';
+    if (titleEl) titleEl.textContent = 'Divisor Inteligente (1:2)';
+    if (subtitleEl) {
+      subtitleEl.textContent = piece ? `Casilla (${piece.x}, ${piece.y})` : 'Modo de Enrutamiento';
+    }
+
+    if (presetBtn) {
+      presetBtn.style.display = 'block';
+      presetBtn.textContent = '⭐ Guardar como Modo por Defecto';
+      presetBtn.onclick = () => {
+        this.game.defaultSplitterMode = piece ? (piece.priorityMode || 'balanced') : currentMode;
+        this.showToast(`Modo divisor por defecto actualizado`, 1800);
+      };
+    }
+
+    const modes = [
+      {
+        id: 'balanced',
+        name: 'Alternancia Equilibrada (50/50)',
+        badge: '1:1',
+        desc: 'Alterna estrictamente entre la salida frontal y la lateral derecha.'
+      },
+      {
+        id: 'priority_main',
+        name: 'Prioridad Salida Frontal (▲)',
+        badge: 'PRI ▲',
+        desc: 'Envía siempre por el frente. Solo desvía a la derecha si el frente está lleno.'
+      },
+      {
+        id: 'priority_side',
+        name: 'Prioridad Salida Derecha (▶)',
+        badge: 'PRI ▶',
+        desc: 'Envía siempre por la derecha. Solo usa el frente como desbordamiento (overflow).'
+      }
+    ];
+
+    let html = `
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        Configura la lógica de prioridad y desbordamiento de este divisor:
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+    `;
+
+    for (const m of modes) {
+      const isSelected = currentMode === m.id;
+      html += `
+        <div class="sidebar-splitter-card ${isSelected ? 'active' : ''}" data-mode="${m.id}" style="
+          padding: 12px;
+          border-radius: 8px;
+          border: 1.5px solid ${isSelected ? '#00F0FF' : 'var(--border-color, #E5E9F0)'};
+          background: ${isSelected ? 'rgba(0, 240, 255, 0.12)' : 'var(--surface-color, #FFFFFF)'};
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: all 0.2s ease;
+        ">
+          <div class="mono" style="font-size: 11px; font-weight: 700; padding: 6px 8px; border-radius: 6px; background: rgba(0, 240, 255, 0.16); color: var(--text-bright);">
+            ${m.badge}
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-bright);">${m.name}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${m.desc}</div>
+          </div>
+          ${isSelected ? `<span style="color: #00F0FF; font-weight: bold;">✓</span>` : ''}
+        </div>
+      `;
+    }
+    html += '</div>';
+
+    if (bodyEl) {
+      bodyEl.innerHTML = html;
+      const cards = bodyEl.querySelectorAll('.sidebar-splitter-card');
+      cards.forEach(card => {
+        card.addEventListener('click', () => {
+          const mode = card.dataset.mode;
+          if (piece) {
+            piece.priorityMode = mode;
+          }
+          this.game.defaultSplitterMode = mode;
+          this.game.audio?.playSplitter?.();
+          this.openSplitterSidebar(piece);
+        });
+      });
+    }
+
+    sidebar.classList.add('open', 'visible');
+    sidebar.setAttribute('aria-hidden', 'false');
+  }
+
   closeMachineSidebar() {
     const sidebar = document.getElementById('machine-config-sidebar');
     if (sidebar) {
@@ -4610,7 +5160,7 @@ export class UIManager {
     if (!grid) return;
     grid.innerHTML = '';
 
-    for (let i = 1; i <= 60; i++) {
+    for (let i = 1; i <= 68; i++) {
       const btn = document.createElement('button');
       btn.className = `hacker-level-btn mono ${this.game.saveData.nivelActual === i ? 'current' : ''}`;
       btn.textContent = i;
@@ -4637,11 +5187,13 @@ export class UIManager {
     const isChapter2Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(20)) || maxUnlocked > 20 || save.nivelActual > 20;
     const isChapter3Unlocked = (save.nivelesCompletados && save.nivelesCompletados.includes(40)) || maxUnlocked > 40 || save.nivelActual > 40;
     const isChapter4Unlocked = QuantumDLC.isEnabled || (save.nivelesCompletados && save.nivelesCompletados.includes(60)) || maxUnlocked > 60 || save.nivelActual > 60;
+    const isChapter5Unlocked = true; // Cap 5 Cyber-Industrial desbloqueado para experimentar las nuevas mecánicas
 
     const tab1 = document.getElementById('tab-chapter-1');
     const tab2 = document.getElementById('tab-chapter-2');
     const tab3 = document.getElementById('tab-chapter-3');
     const tab4 = document.getElementById('tab-chapter-4');
+    const tab5 = document.getElementById('tab-chapter-5');
     if (tab1) tab1.className = `level-tab-btn ${this.activeChapter === 1 ? 'active' : ''}`;
     if (tab2) {
       tab2.className = `level-tab-btn ${this.activeChapter === 2 ? 'active' : ''} ${!isChapter2Unlocked ? 'locked-tab' : ''}`;
@@ -4655,6 +5207,10 @@ export class UIManager {
       tab4.className = `level-tab-btn ${this.activeChapter === 4 ? 'active' : ''} ${!isChapter4Unlocked ? 'locked-tab' : ''}`;
       tab4.title = isChapter4Unlocked ? "Capítulo 4: DLC Cuántico (61–64)" : "Activa el DLC para jugar la Expansión Cuántica";
     }
+    if (tab5) {
+      tab5.className = `level-tab-btn ${this.activeChapter === 5 ? 'active' : ''}`;
+      tab5.title = "Capítulo 5: Cyber-Industrial (65–68)";
+    }
 
     let startLevel = 1;
     let endLevel = 20;
@@ -4667,6 +5223,9 @@ export class UIManager {
     } else if (this.activeChapter === 4) {
       startLevel = 61;
       endLevel = 64;
+    } else if (this.activeChapter === 5) {
+      startLevel = 65;
+      endLevel = 68;
     }
 
     const filteredLevels = LEVELS.filter(l => l.id >= startLevel && l.id <= endLevel);
@@ -4676,8 +5235,9 @@ export class UIManager {
       const isCurrent = save.nivelActual === lvl.id;
       const chapterUnlocked = lvl.id <= 20 || 
         (lvl.id <= 40 ? isChapter2Unlocked : 
-        (lvl.id <= 60 ? isChapter3Unlocked : isChapter4Unlocked));
-      const isUnlocked = ((lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) || (lvl.id === 61 && isChapter4Unlocked)) && chapterUnlocked;
+        (lvl.id <= 60 ? isChapter3Unlocked :
+        (lvl.id <= 64 ? isChapter4Unlocked : isChapter5Unlocked)));
+      const isUnlocked = ((lvl.id <= maxUnlocked || lvl.id <= save.nivelActual) || (lvl.id === 61 && isChapter4Unlocked) || lvl.id >= 65) && chapterUnlocked;
 
       const btn = document.createElement('button');
       btn.className = `level-card-btn ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${!isUnlocked ? 'locked' : ''}`;
@@ -4707,7 +5267,7 @@ export class UIManager {
         });
       } else {
         btn.addEventListener('click', () => {
-          if (lvl.id > 60 && !isChapter4Unlocked) {
+          if (lvl.id > 60 && lvl.id <= 64 && !isChapter4Unlocked) {
             this.showToast("🔒 Activa la Expansión DLC para desbloquear este nivel", 2000);
           } else if (lvl.id > 40 && !isChapter3Unlocked) {
             this.showToast("🔒 Completa el nivel 40 para desbloquear el Capítulo 3: Vanguardia", 2000);
@@ -4736,10 +5296,10 @@ export class UIManager {
     const coins = save.coins !== undefined ? save.coins : (save.monedas || 0);
 
     const starsEl = document.getElementById('menu-total-stars');
-    if (starsEl) starsEl.textContent = `⭐ ${totalStars}/192`;
+    if (starsEl) starsEl.textContent = `⭐ ${totalStars}/204`;
 
     const levelsEl = document.getElementById('menu-total-levels');
-    if (levelsEl) levelsEl.textContent = `🏆 ${completedCount}/64`;
+    if (levelsEl) levelsEl.textContent = `🏆 ${completedCount}/68`;
 
     const coinsEl = document.getElementById('menu-coins');
     if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
@@ -5135,7 +5695,7 @@ export class BeltFlowGame {
   }
 
   setPalettePreset(preset) {
-    const valid = ['suave', 'pastel-frio', 'pastel-calido', 'nordico', 'alto-contraste', 'sepia'];
+    const valid = ['suave', 'pastel-frio', 'pastel-calido', 'nordico', 'alto-contraste', 'sepia', 'cyberpunk'];
     const p = valid.includes(preset) ? preset : 'suave';
     document.documentElement.setAttribute('data-palette', p);
     this.saveData.config.palettePreset = p;
@@ -5148,6 +5708,20 @@ export class BeltFlowGame {
       this.ui.updateLevelInfo(this.currentLevel);
     }
     this.autoSave();
+  }
+
+  toggleIPMOverlay() {
+    if (!this.renderer) return;
+    this.renderer.showIPMOverlay = !this.renderer.showIPMOverlay;
+    const btn = document.getElementById('btn-ipm-toggle');
+    if (btn) btn.classList.toggle('active', this.renderer.showIPMOverlay);
+    this.audio?.playTone?.(580, 'sine', 0.05, 0.02);
+    this.ui.showToast(
+      this.renderer.showIPMOverlay
+        ? "📊 Telemetría IPM en casillas activada (Tecla I)"
+        : "📊 Telemetría IPM en casillas oculta",
+      1600
+    );
   }
 
   detectAndApplyDeviceMode(pref = 'auto') {
@@ -5359,16 +5933,13 @@ export class BeltFlowGame {
 
   restartLevelMap() {
     const userPieces = this.grid.getAllPieces().filter(p => !p.fixed);
-    if (userPieces.length > 5) {
-      if (!confirm("¿Deseas reiniciar la construcción de este nivel? Se borrarán las piezas que has colocado.")) {
-        return;
-      }
-    }
 
-    this.recordAction({
-      type: 'clear',
-      pieces: userPieces.map(p => ({ ...p }))
-    });
+    if (userPieces.length > 0) {
+      this.recordAction({
+        type: 'clear',
+        pieces: userPieces.map(p => ({ ...p }))
+      });
+    }
 
     this.grid.clearNonFixed();
     this.sim.reset();
@@ -5385,7 +5956,7 @@ export class BeltFlowGame {
     this.ui.updateQuota(0, this.totalQuota, this.currentDemands);
     this.ui.updateLives(this.lives, false);
     this.updateBudgetHUD();
-    this.ui.showToast("Construcción del nivel reiniciada", 1500);
+    this.ui.showToast("🧹 Mapa limpiado (Pulsa ↩️ Deshacer para restaurar)", 2200);
     this.autoSave();
     this.updateGhost();
   }
@@ -5436,6 +6007,10 @@ export class BeltFlowGame {
     this.updateGhost();
   }
 
+  isBeltToolType(t) {
+    return t === 'belt' || t === 'belt_fast' || t === 'belt_hyper' || t === 'belt_slow';
+  }
+
   updateGhost(gridX, gridY) {
     if (gridX === undefined || gridY === undefined) {
       if (!this.renderer.ghost) return;
@@ -5469,7 +6044,7 @@ export class BeltFlowGame {
     }
 
     // Anticipar y alinear la dirección de la cinta automáticamente
-    if (this.selectedTool === 'belt' && !existing && (!this.input || !this.input.isPointerDown)) {
+    if (this.isBeltToolType(this.selectedTool) && !existing && (!this.input || !this.input.isPointerDown)) {
       let detectedDir = null;
 
       // 1. Prioridad: un vecino que ya apunte directamente hacia esta casilla
@@ -5487,7 +6062,7 @@ export class BeltFlowGame {
         for (let d = 0; d < 4; d++) {
           const neighborDelta = DIR_DELTA[OPPOSITE_DIR[d]];
           const neighbor = this.grid.get(gridX + neighborDelta.x, gridY + neighborDelta.y);
-          if (neighbor && neighbor.type === 'belt' && !neighbor.fixed) {
+          if (neighbor && this.isBeltToolType(neighbor.type) && !neighbor.fixed) {
             const frontDelta = DIR_DELTA[neighbor.dir];
             const frontPiece = this.grid.get(neighbor.x + frontDelta.x, neighbor.y + frontDelta.y);
             if (!frontPiece && d !== OPPOSITE_DIR[neighbor.dir]) {
@@ -5532,15 +6107,15 @@ export class BeltFlowGame {
     const existing = this.grid.get(x, y);
     if (existing && existing.fixed) return;
 
-    // Si ya existe una cinta en esta celda
-    if (existing && existing.type === 'belt') {
+    // Si ya existe una cinta del mismo tipo en esta celda
+    if (existing && existing.type === this.selectedTool && this.isBeltToolType(existing.type)) {
       if (existing.dir !== this.placementDir) {
         existing.dir = this.placementDir;
       } else {
         existing.dir = (existing.dir + 1) % 4;
         this.placementDir = existing.dir;
       }
-      this.renderer.addPlacementEffect(x, y, 'belt');
+      this.renderer.addPlacementEffect(x, y, this.selectedTool);
       this.audio.playChainPlaf();
       this.updateGhost(x, y);
       return;
@@ -5553,7 +6128,7 @@ export class BeltFlowGame {
       const ny = y + neighborDelta.y;
       const neighbor = this.grid.get(nx, ny);
 
-      if (neighbor && neighbor.type === 'belt' && !neighbor.fixed) {
+      if (neighbor && this.isBeltToolType(neighbor.type) && !neighbor.fixed) {
         const frontDelta = DIR_DELTA[neighbor.dir];
         const frontPiece = this.grid.get(neighbor.x + frontDelta.x, neighbor.y + frontDelta.y);
         if (!frontPiece && d !== OPPOSITE_DIR[neighbor.dir]) {
@@ -5568,7 +6143,7 @@ export class BeltFlowGame {
   }
 
   dragDrawBelt(fromX, fromY, toX, toY) {
-    if (this.mode !== 'edit' || this.selectedTool !== 'belt') return;
+    if (this.mode !== 'edit' || !this.isBeltToolType(this.selectedTool)) return;
 
     const dx = toX - fromX;
     const dy = toY - fromY;
@@ -5607,7 +6182,7 @@ export class BeltFlowGame {
 
     for (const step of steps) {
       const prevPiece = this.grid.get(prevX, prevY);
-      if (prevPiece && prevPiece.type === 'belt' && !prevPiece.fixed) {
+      if (prevPiece && this.isBeltToolType(prevPiece.type) && !prevPiece.fixed) {
         prevPiece.dir = step.dir;
       }
 
@@ -5615,9 +6190,10 @@ export class BeltFlowGame {
       const targetPiece = this.grid.get(step.x, step.y);
       if (!targetPiece) {
         this.placePieceAt(step.x, step.y);
-      } else if (targetPiece.type === 'belt' && !targetPiece.fixed) {
+      } else if (this.isBeltToolType(targetPiece.type) && !targetPiece.fixed) {
+        targetPiece.type = this.selectedTool;
         targetPiece.dir = step.dir;
-        this.renderer.addPlacementEffect(step.x, step.y, 'belt');
+        this.renderer.addPlacementEffect(step.x, step.y, this.selectedTool);
         this.audio.playChainPlaf();
       }
 
@@ -5822,7 +6398,7 @@ export class BeltFlowGame {
       return;
     }
 
-    const isBeltLike = (t) => t === 'belt' || t === 'belt_fast' || t === 'belt_slow';
+    const isBeltLike = (t) => t === 'belt' || t === 'belt_fast' || t === 'belt_hyper' || t === 'belt_slow';
 
     // Cintas del mismo tipo sobre sí mismas: rotar dirección
     if (existing && isBeltLike(existing.type) && existing.type === this.selectedTool) {
@@ -5847,7 +6423,7 @@ export class BeltFlowGame {
 
     // Misma pieza sin cambios
     if (existing && existing.type === this.selectedTool && existing.dir === this.placementDir) {
-      if (this.selectedTool !== 'painter' || existing.color === this.painterColor) {
+      if ((this.selectedTool !== 'painter' && this.selectedTool !== 'cross_hub') || existing.color === this.painterColor) {
         return;
       }
     }
@@ -5857,7 +6433,8 @@ export class BeltFlowGame {
       y: y,
       type: this.selectedTool,
       dir: this.placementDir,
-      color: (this.selectedTool === 'painter' || this.selectedTool === 'filter') ? this.painterColor : null,
+      color: (this.selectedTool === 'painter' || this.selectedTool === 'filter' || this.selectedTool === 'cross_hub') ? this.painterColor : null,
+      priorityMode: this.selectedTool === 'splitter' ? (this.defaultSplitterMode || 'balanced') : undefined,
       shape: null,
       fixed: false
     };
@@ -5874,7 +6451,7 @@ export class BeltFlowGame {
 
     if (isBeltLike(this.selectedTool)) {
       this.audio.playChainPlaf();
-    } else if (this.selectedTool === 'splitter') {
+    } else if (this.selectedTool === 'splitter' || this.selectedTool === 'balancer') {
       this.audio.playSplitter();
     } else {
       this.audio.playPlaf();
@@ -6101,11 +6678,11 @@ export class BeltFlowGame {
 
   loadNextLevel() {
     const nextId = this.currentLevel.id + 1;
-    if (nextId <= 60 && nextId <= LEVELS.length) {
+    if (nextId <= 68 && nextId <= LEVELS.length) {
       this.loadLevel(nextId);
     } else {
-      this.ui.showToast("🎉 ¡Has completado todos los 60 niveles de BeltFlow v3.0! Enhorabuena maestro.", 5000);
-      this.loadLevel(60);
+      this.ui.showToast("🎉 ¡Has completado todos los 68 niveles de BeltFlow v4.0 Cyber-Industrial!", 5000);
+      this.loadLevel(68);
     }
   }
 
@@ -6159,7 +6736,7 @@ export class BeltFlowGame {
     const completed = save.nivelesCompletados || [];
 
     // Primeros pasos
-    if (this.grid.getAllPieces().some(p => p.type === 'belt' || p.type === 'belt_fast' || p.type === 'belt_slow')) {
+    if (this.grid.getAllPieces().some(p => this.isBeltToolType(p.type))) {
       this.unlockAchievement('first_belt');
     }
 
@@ -6169,6 +6746,7 @@ export class BeltFlowGame {
     if (completed.includes(40)) this.unlockAchievement('chapter_2');
     if (completed.includes(60)) this.unlockAchievement('chapter_3');
     if (completed.includes(64)) this.unlockAchievement('chapter_4');
+    if (completed.includes(68)) this.unlockAchievement('chapter_5');
 
     // Expansión Biomolecular & Cuántica
     if (this.sim.totalCrafted?.['sugar_cube'] || completed.includes(61)) {
@@ -6183,6 +6761,7 @@ export class BeltFlowGame {
     if (this.sim.totalCrossingsTraversed >= 100) this.unlockAchievement('crossing_ace');
     if (this.sim.totalFiltersProcessed >= 50) this.unlockAchievement('filter_master');
     if (this.sim.totalPortalsTraversed >= 50) this.unlockAchievement('portal_traveler');
+    if ((this.sim.totalCrossHubProcessed || 0) >= 30 || (this.sim.totalCrossHubsProcessed || 0) >= 30) this.unlockAchievement('cross_hub_architect');
 
     // Buffer lleno
     const anyFull = this.grid.getAllPieces().some(p => p.type === 'buffer' && (p.bufferQueue?.length || 0) >= 6);
@@ -6190,6 +6769,7 @@ export class BeltFlowGame {
 
     // Tasa de producción
     if (this.sim.currentThroughputRate >= 1.5) this.unlockAchievement('speed_demon');
+    if (this.sim.currentIPM >= 120) this.unlockAchievement('hyper_logistics');
 
     // Racha
     if (this.streak >= 20) this.unlockAchievement('streak_20');
@@ -6227,6 +6807,7 @@ export class BeltFlowGame {
 
   toggleTheme() {
     this.setTheme(!this.isDark);
+    this.ui?.showToast?.(this.isDark ? "🌙 Modo Noche activado" : "☀️ Modo Día (Blanco) activado", 1500);
   }
 
   setTheme(isDark) {
@@ -6236,6 +6817,7 @@ export class BeltFlowGame {
 
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
     this.ui.setThemeIcons(isDark);
+    this.autoSave();
 
     if (this.currentLevel) {
       this.ui.updateLevelInfo(this.currentLevel);
@@ -6293,6 +6875,12 @@ export class BeltFlowGame {
           const biomeIdx = lvlId > 40 ? 3 : (lvlId > 20 ? 2 : 1);
           this.audio.playAmbientChime(biomeIdx);
         }
+      }
+
+      // Actualizar medidor IPM global en HUD
+      const ipmEl = document.getElementById('hud-ipm-display');
+      if (ipmEl) {
+        ipmEl.textContent = `${this.sim.currentIPM || 0} IPM`;
       }
 
       // Actualizar medidor de flujo sostenido en HUD

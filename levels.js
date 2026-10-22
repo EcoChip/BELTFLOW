@@ -1535,6 +1535,119 @@ export const LEVELS = [
       { x: 3, y: 16, type: 'mine', resourceType: 'quantum_anomaly', dir: 0, shape: { dlcItem: 'subatomic_particle' }, fixed: true },
       { x: 23, y: 10, type: 'delivery', dir: 2, fixed: true }
     ]
+  },
+
+  // ==========================================================================
+  // CAPÍTULO 5: INGENIERÍA CIBERNÉTICA & HIPER-FLUJO (Niveles 65–68)
+  // ==========================================================================
+
+  // Nivel 65: Corredor Hiper-Cinta MK3
+  {
+    id: 65,
+    chapter: 5,
+    name: "Corredor Hiper-Cinta MK3",
+    description: "Transporta recursos a 4.0x de velocidad usando Hiper-Cintas MK3 (180 IPM) y equilibra las líneas con el Balanceador 3-Vías.",
+    hint: "Selecciona la Hiper-Cinta MK3 (H) para triplicar la velocidad base y usa el Balanceador (G) para repartir en 3 direcciones.",
+    hasLives: false,
+    targetRate: 2.0,
+    timeLimit: 200,
+    quota: 36,
+    stars: { gold: 45, silver: 80, bronze: 130 },
+    targetShape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT),
+    demands: [
+      { id: 'mk3_1', name: 'Terminal Norte (MK3)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), quota: 12, deliveryIndex: 0 },
+      { id: 'mk3_2', name: 'Terminal Central (MK3)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), quota: 12, deliveryIndex: 1 },
+      { id: 'mk3_3', name: 'Terminal Sur (MK3)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), quota: 12, deliveryIndex: 2 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'belt_hyper', 'extractor', 'splitter', 'balancer', 'merger', 'crossing', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY],
+    fixedGrid: [
+      { x: 3, y: 6, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
+      { x: 3, y: 10, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT), fixed: true },
+      { x: 18, y: 5, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 18, y: 8, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 },
+      { x: 18, y: 11, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 2 }
+    ]
+  },
+
+  // Nivel 66: El Hub de Procesamiento Cruzado
+  {
+    id: 66,
+    chapter: 5,
+    name: "Hub de Procesamiento Cruzado",
+    description: "Utiliza el nuevo Cross-Processing Hub (K) para fusionar y teñir simultáneamente dos flujos perpendiculares en un solo paso.",
+    hint: "Coloca el Cross-Hub (K): alimenta formas por detrás y por los laterales, configúralo con color Cielo y recoge la forma compuesta al frente.",
+    hasLives: false,
+    timeLimit: 220,
+    quota: 20,
+    stars: { gold: 55, silver: 95, bronze: 150 },
+    targetShape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.SKY, SHAPE_TYPES.STAR, PASTEL_COLORS.SKY),
+    availableTools: ['belt', 'belt_fast', 'belt_hyper', 'extractor', 'cutter', 'cross_hub', 'painter', 'crossing', 'trash'],
+    allowedColors: [PASTEL_COLORS.SKY, PASTEL_COLORS.MINT, PASTEL_COLORS.LAVENDER],
+    fixedGrid: [
+      { x: 4, y: 5, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 4, y: 11, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 17, y: 8, type: 'delivery', dir: 2, fixed: true }
+    ]
+  },
+
+  // Nivel 67: Matriz de Distribución 180 IPM
+  {
+    id: 67,
+    chapter: 5,
+    name: "Matriz de Distribución 180 IPM",
+    description: "Diseña una red logística de alta densidad combinando Balanceadores 3-Vías, Cross-Hubs y Cintas MK3 para abastecer dos terminales.",
+    hint: "Activa el monitor de IPM (Items/Min) en la barra superior para verificar los cuellos de botella en tiempo real.",
+    hasLives: false,
+    targetRate: 1.8,
+    timeLimit: 240,
+    quota: 32,
+    stars: { gold: 65, silver: 110, bronze: 175 },
+    targetShape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.LAVENDER, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER),
+    demands: [
+      { id: 'mat_1', name: 'Núcleo Lavanda A', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.LAVENDER, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER), quota: 16, deliveryIndex: 0 },
+      { id: 'mat_2', name: 'Núcleo Menta B', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.MINT, SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.MINT), quota: 16, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'belt_hyper', 'extractor', 'cutter', 'painter', 'cross_hub', 'splitter', 'balancer', 'merger', 'crossing', 'tunnel', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.LAVENDER, PASTEL_COLORS.MINT, PASTEL_COLORS.CORAL],
+    fixedGrid: [
+      { x: 3, y: 4, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 8, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 12, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 16, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 19, y: 6, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 19, y: 14, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 }
+    ]
+  },
+
+  // Nivel 68: Megafactoría Cyber-Nexus (Sandbox Supremo)
+  {
+    id: 68,
+    chapter: 5,
+    name: "Megafactoría Cyber-Nexus",
+    description: "El pináculo de la ingeniería de automatización: integra Síntesis Cuántica 2x2, Cross-Hubs y logística MK3 sin límite de tiempo.",
+    hint: "Modo Sandbox Cyber-Industrial completo: todas las herramientas desbloqueadas para alcanzar el máximo rendimiento de IPM.",
+    hasLives: false,
+    timeLimit: null,
+    quota: 25,
+    stars: { gold: 90, silver: 150, bronze: 240 },
+    targetShape: { dlcItem: 'quantum_sugar_cube' },
+    demands: [
+      { id: 'cyb_1', name: 'Hipercubo Cuántico', shape: { dlcItem: 'quantum_sugar_cube' }, quota: 5, deliveryIndex: 0 },
+      { id: 'cyb_2', name: 'Estrella-Rombo Cielo', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.SKY, SHAPE_TYPES.DIAMOND, PASTEL_COLORS.SKY), quota: 20, deliveryIndex: 1 }
+    ],
+    availableTools: ['belt', 'belt_fast', 'belt_hyper', 'belt_slow', 'extractor', 'cutter', 'painter', 'cross_hub', 'factory_1x1', 'factory_2x2', 'splitter', 'balancer', 'merger', 'filter', 'crossing', 'tunnel', 'buffer', 'trash'],
+    allowedColors: [PASTEL_COLORS.MINT, PASTEL_COLORS.SKY, PASTEL_COLORS.LAVENDER, PASTEL_COLORS.PEACH, PASTEL_COLORS.CORAL],
+    fixedGrid: [
+      { x: 3, y: 3, type: 'mine', resourceType: 'sugar_deposit', dir: 0, shape: { dlcItem: 'sugar_crystal' }, fixed: true },
+      { x: 3, y: 7, type: 'mine', resourceType: 'protein_deposit', dir: 0, shape: { dlcItem: 'raw_protein' }, fixed: true },
+      { x: 3, y: 11, type: 'mine', resourceType: 'quantum_anomaly', dir: 0, shape: { dlcItem: 'subatomic_particle' }, fixed: true },
+      { x: 3, y: 15, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 3, y: 19, type: 'mine', dir: 0, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.GRAY), fixed: true },
+      { x: 22, y: 7, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 0 },
+      { x: 22, y: 17, type: 'delivery', dir: 2, fixed: true, deliveryIndex: 1 }
+    ]
   }
 ];
 
@@ -1577,6 +1690,15 @@ export const BIOMES = {
     particleType: 'quantum',
     themeColor: '#AF7AC5',
     description: "Vórtices cuánticos lavanda, síntesis de sacarosa y resonancia subatómica."
+  },
+  5: {
+    id: 'cyber',
+    chapter: 5,
+    name: "Complejo Cyber-Industrial",
+    levels: "65–68",
+    particleType: 'cyber_grid',
+    themeColor: '#00F0FF',
+    description: "Logística de ultra-velocidad MK3, hubs de procesamiento cruzado y telemetría IPM."
   }
 };
 
@@ -1585,9 +1707,9 @@ export const BIOMES = {
    ========================================================================== */
 export const COSMETIC_SKINS = [
   { id: 'default', name: 'Cinta Clásica', cost: 0, desc: 'Diseño industrial estándar anti-fatiga' },
+  { id: 'skin_cyber', name: 'Cyber-Industrial Neon', cost: 0, desc: 'Chasis de grafito con chevrons láser cian de alta visibilidad' },
   { id: 'skin_bamboo', name: 'Bambú Zen', cost: 15, desc: 'Acabado en madera suave con vetas naturales' },
   { id: 'skin_sakura', name: 'Flor de Cerezo', cost: 25, desc: 'Tonalidades pétalo de cerezo y ribetes suaves' },
-  { id: 'skin_cyber', name: 'Menta Cuántica', cost: 35, desc: 'Líneas depuradas con pulsos translúcidos de luz' },
   { id: 'skin_gold', name: 'Oro Satinado', cost: 50, desc: 'Brillo cálido mate reservado a los grandes maestros' }
 ];
 
@@ -1601,13 +1723,16 @@ export const ACHIEVEMENTS = [
   { id: 'chapter_2', icon: '❄️', name: "Maestro Zen", desc: "Completa el Capítulo 2 (Nivel 40)." },
   { id: 'chapter_3', icon: '🌌', name: "Gran Ingeniero Universal", desc: "Completa el Capítulo 3 (Nivel 60)." },
   { id: 'chapter_4', icon: '🔮', name: "Erudito Cuántico", desc: "Supera los niveles de la Expansión Biomolecular & Cuántica." },
+  { id: 'chapter_5', icon: '⚡', name: "Arquitecto Cyber-Industrial", desc: "Domina el Capítulo 5 de Hiper-Flujo (Nivel 68)." },
   { id: 'first_sugar_cube', icon: '🧊', name: "Dulzura Pura", desc: "Sintetiza tu primer Terrón de Azúcar en una Fábrica 1x1." },
   { id: 'quantum_master', icon: '⚛️', name: "Resonancia Endgame", desc: "Sintetiza un Terrón Cuántico en la Mega Ensambladora 2x2." },
+  { id: 'hyper_belt_pro', icon: '🚀', name: "Velocidad Luz MK3", desc: "Construye una línea de Hiper-Cintas MK3." },
+  { id: 'cross_hub_master', icon: '💠', name: "Síntesis Cruzada", desc: "Procesa 25 piezas mediante el Cross-Processing Hub." },
   { id: 'splitter_pro', icon: '🔀', name: "División Justa", desc: "Entrega 50 piezas divididas equitativamente." },
   { id: 'crossing_ace', icon: '➕', name: "Cruce Sin Accidentes", desc: "Transporta 100 piezas a través de cruces." },
   { id: 'filter_master', icon: '🎯', name: "Clasificador Supremo", desc: "Filtra 50 piezas usando selectores." },
   { id: 'zero_trash', icon: '🍃', name: "Cero Desperdicio", desc: "Supera un nivel sin usar trituradora." },
-  { id: 'speed_demon', icon: '⚡', name: "Fiebre de Velocidad", desc: "Alcanza una tasa de producción de 1.5 piezas/s." },
+  { id: 'speed_demon', icon: '⚡', name: "Fiebre de Velocidad", desc: "Alcanza una tasa de producción de 90 IPM (1.5/s)." },
   { id: 'budget_hero', icon: '📐', name: "Minimalismo Industrial", desc: "Supera un nivel cumpliendo el objetivo de presupuesto." },
   { id: 'repairman', icon: '🔧', name: "Manitas de Fábrica", desc: "Resuelve tu primer nivel de reparación." },
   { id: 'portal_traveler', icon: '🌀', name: "Salto Cuántico", desc: "Teletransporta 50 formas a través de portales." },
@@ -1624,3 +1749,4 @@ export const ACHIEVEMENTS = [
   { id: 'star_collector_120', icon: '🌟', name: "Constelación Suprema", desc: "Acumula 120 estrellas." },
   { id: 'cosmetic_enthusiast', icon: '🎀', name: "Estilo Personalizado", desc: "Desbloquea y equipa tu primer aspecto cosmético." }
 ];
+
