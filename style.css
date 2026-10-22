@@ -1089,7 +1089,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 100;
+  z-index: 250;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
@@ -1576,7 +1576,7 @@ input:checked + .toggle-slider::before {
   pointer-events: none;
   opacity: 0;
   transition: var(--transition-smooth);
-  z-index: 110;
+  z-index: 300;
 }
 
 .toast-msg.show {
@@ -1813,17 +1813,27 @@ input:checked + .toggle-slider::before {
 .main-menu-screen {
   position: fixed;
   inset: 0;
-  z-index: 85;
+  z-index: 120;
   display: none;
   background: transparent;
   pointer-events: none;
-  transition: opacity 0.4s ease, visibility 0.4s ease;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .main-menu-screen.open,
 .main-menu-screen.visible {
   display: flex;
   pointer-events: auto;
+}
+
+body.in-menu .top-hud,
+body.in-menu .hint-banner,
+body.in-menu .bottom-dock,
+body.in-menu .floating-actions,
+body.in-menu .mode-indicator-pill {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .main-menu-screen.closing,
@@ -1836,19 +1846,20 @@ input:checked + .toggle-slider::before {
 }
 
 .menu-sidebar {
-  width: 32%;
+  width: 34%;
   min-width: 320px;
-  max-width: 440px;
+  max-width: 420px;
   height: 100%;
   background: var(--surface-color);
   border-right: 1px solid var(--border-color);
-  padding: 40px 32px;
+  padding: 28px 26px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   box-shadow: var(--shadow-float);
   backdrop-filter: blur(16px);
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+  overflow-y: auto;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
   z-index: 2;
 }
 
@@ -1893,23 +1904,24 @@ input:checked + .toggle-slider::before {
 .menu-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 28px 0;
+  gap: 8px;
+  margin: 16px 0;
 }
 
 .menu-btn {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: 12px;
+  padding: 11px 16px;
   border-radius: var(--radius-md);
   background: var(--bg-color);
   border: 1px solid var(--border-color);
   color: var(--text-main);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   transition: var(--transition-fast);
   text-align: left;
+  cursor: pointer;
 }
 
 .menu-btn:hover {
@@ -2846,4 +2858,29 @@ input:checked + .toggle-slider::before {
     transform: translateY(0) !important;
   }
 }
+
+/* Botón HUD de Monedas y Mejoras Tecnológicas */
+.upgrades-hud-btn {
+  border-color: #F59E0B !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: var(--text-bright) !important;
+  gap: 6px;
+}
+
+.upgrades-hud-btn:hover {
+  background: rgba(245, 158, 11, 0.22) !important;
+  transform: translateY(-1px);
+}
+
+.upgrades-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #F59E0B;
+  color: #0F172A;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 

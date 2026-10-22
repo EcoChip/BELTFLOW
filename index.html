@@ -54,6 +54,10 @@
             <span class="menu-btn-icon">🏆</span>
             <span class="menu-btn-text">Logros (31)</span>
           </button>
+          <button id="menu-btn-upgrades" class="menu-btn">
+            <span class="menu-btn-icon">⚡</span>
+            <span class="menu-btn-text">Laboratorio de Mejoras</span>
+          </button>
           <button id="menu-btn-shop" class="menu-btn">
             <span class="menu-btn-icon">🎀</span>
             <span class="menu-btn-text">Aspectos & Monedas</span>
@@ -138,6 +142,15 @@
           <span class="pill-badge-label">Flujo</span>
           <span class="pill-badge-value mono" id="hud-ipm-display">0 IPM</span>
         </div>
+      </div>
+
+      <!-- Monedas y Acceso Rápido al Laboratorio de Mejoras -->
+      <div class="hud-panel" id="hud-upgrades-panel">
+        <button id="btn-upgrades-modal" class="mode-toggle-btn upgrades-hud-btn" title="Laboratorio de Mejoras de la Mega-Fábrica">
+          <span class="mode-toggle-icon">⚡</span>
+          <span class="mode-toggle-label mono" id="hud-coins-display">0 🪙</span>
+          <span class="upgrades-badge">Mejoras</span>
+        </button>
       </div>
 
       <!-- Presupuesto de componentes (Nivel con límite de piezas) -->
@@ -725,8 +738,31 @@
         </div>
 
         <div style="display: flex; gap: 12px; width: 100%;">
-          <button id="btn-replay-level" class="btn btn-secondary" style="flex: 1;">Reintentar</button>
-          <button id="btn-next-level" class="btn btn-primary" style="flex: 1.5;">Siguiente Nivel ➔</button>
+          <button id="btn-replay-level" class="btn btn-secondary" style="flex: 1;">Repetir Cuota</button>
+          <button id="btn-next-level" class="btn btn-primary" style="flex: 1.8;">Continuar Expandiendo (Nivel Sig.) ➔</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Laboratorio de Mejoras (Tech Tree Adictivo) -->
+    <div class="modal-overlay" id="upgrades-modal">
+      <div class="modal-card shop-card">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">⚡</span>
+            <h2 class="modal-title heading">Laboratorio de Ingeniería & Mejoras</h2>
+          </div>
+          <button class="modal-close-btn" id="btn-close-upgrades" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="shop-balance-bar">
+            <span>Monedas de Fábrica disponibles:</span>
+            <strong class="shop-balance-val mono" id="upgrades-coins-val">🪙 0</strong>
+          </div>
+          <p class="aesthetic-desc">Cada pieza entregada al Núcleo Central genera monedas en tiempo real. Invierte en mejoras permanentes para acelerar toda tu Mega-Fábrica:</p>
+          <div class="shop-grid" id="upgrades-grid-container">
+            <!-- Rellenado dinámicamente con las mejoras tecnológicas -->
+          </div>
         </div>
       </div>
     </div>

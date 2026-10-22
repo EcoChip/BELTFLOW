@@ -51,6 +51,13 @@ export class SaveManager {
         ambientMusic: true,
         showIPMOverlay: false
       },
+      upgrades: {
+        beltSpeed: 0,
+        extractorSpeed: 0,
+        painterEfficiency: 0,
+        coinValue: 0
+      },
+      megaFactoryPieces: [],
       construcciones: {}
     };
   }
@@ -77,6 +84,8 @@ export class SaveManager {
         ...def,
         ...parsed,
         config: { ...def.config, ...(parsed.config || {}) },
+        upgrades: { ...def.upgrades, ...(parsed.upgrades || {}) },
+        megaFactoryPieces: Array.isArray(parsed.megaFactoryPieces) ? parsed.megaFactoryPieces : [],
         cosmetics: { ...def.cosmetics, ...(parsed.cosmetics || {}) },
         unlockedCosmetics: parsed.unlockedCosmetics || def.unlockedCosmetics,
         achievements: parsed.achievements || [],
@@ -381,6 +390,11 @@ export class Shapes {
       return a.dlcItem === b.dlcItem;
     }
 
+    // Soporte para Gotas de Pintura / Materia Prima de Pigmento
+    if (a.isPaintDrop || b.isPaintDrop) {
+      return !!(a.isPaintDrop && b.isPaintDrop && a.paintColor === b.paintColor);
+    }
+
     // Si ambos son formas de media pieza (solo tienen una de las dos mitades)
     const aIsHalf = (a.left && !a.right) || (!a.left && a.right);
     const bIsHalf = (b.left && !b.right) || (!b.left && b.right);
@@ -406,6 +420,7 @@ export class Shapes {
   static clone(shape) {
     if (!shape) return null;
     if (shape.dlcItem) return { dlcItem: shape.dlcItem };
+    if (shape.isPaintDrop) return { isPaintDrop: true, paintColor: shape.paintColor };
     return {
       left: shape.left ? { type: shape.left.type, color: shape.left.color } : null,
       right: shape.right ? { type: shape.right.type, color: shape.right.color } : null
@@ -414,7 +429,7 @@ export class Shapes {
 
   static cut(shape) {
     if (!shape) return { leftHalf: null, rightHalf: null };
-    if (shape.dlcItem) return { leftHalf: null, rightHalf: null };
+    if (shape.dlcItem || shape.isPaintDrop) return { leftHalf: null, rightHalf: null };
     const leftHalf = shape.left ? { left: { ...shape.left }, right: null } : null;
     const rightHalf = shape.right ? { left: null, right: { ...shape.right } } : null;
     return { leftHalf, rightHalf };
@@ -422,7 +437,7 @@ export class Shapes {
 
   static paint(shape, newColor) {
     if (!shape) return null;
-    if (shape.dlcItem) return Shapes.clone(shape);
+    if (shape.dlcItem || shape.isPaintDrop) return Shapes.clone(shape);
     const painted = Shapes.clone(shape);
     if (painted.left) painted.left.color = newColor;
     if (painted.right) painted.right.color = newColor;
@@ -433,6 +448,8 @@ export class Shapes {
     if (!shapeA && !shapeB) return null;
     if (!shapeA) return Shapes.clone(shapeB);
     if (!shapeB) return Shapes.clone(shapeA);
+    if (shapeA.isPaintDrop && !shapeB.isPaintDrop) return Shapes.paint(shapeB, shapeA.paintColor);
+    if (shapeB.isPaintDrop && !shapeA.isPaintDrop) return Shapes.paint(shapeA, shapeB.paintColor);
     if (shapeA.dlcItem || shapeB.dlcItem) return Shapes.clone(shapeA.dlcItem ? shapeA : shapeB);
 
     // Determinar la mitad izquierda preferente de shapeA
@@ -452,6 +469,32 @@ export class Shapes {
     // Delegación directa y limpia a QuantumDLC si es un ítem de la expansión
     if (shape.dlcItem) {
       QuantumDLC.drawItem(ctx, shape.dlcItem, size, isDark);
+      return;
+    }
+
+    // Dibujo de Gota / Cápsula de Materia Prima de Pintura (Mena de Pintura)
+    if (shape.isPaintDrop) {
+      const hex = COLOR_HEX[shape.paintColor] || '#C9B6E4';
+      ctx.save();
+      ctx.fillStyle = hex;
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(15, 23, 42, 0.35)';
+      ctx.lineWidth = 1.8;
+
+      const r = size * 0.68;
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 1.25);
+      ctx.bezierCurveTo(r * 1.15, -r * 0.15, r * 1.1, r * 1.05, 0, r * 1.05);
+      ctx.bezierCurveTo(-r * 1.1, r * 1.05, -r * 1.15, -r * 0.15, 0, -r * 1.25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Brillo especular líquido
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.beginPath();
+      ctx.arc(-r * 0.26, r * 0.18, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       return;
     }
 
@@ -634,7 +677,7 @@ export class Grid {
   }
 
   inBounds(x, y) {
-    return x >= 0 && x < this.size && y >= 0 && y < this.size;
+    return x >= -120 && x <= 120 && y >= -120 && y <= 120;
   }
 
   remove(x, y) {
@@ -678,7 +721,12 @@ export class Grid {
           type: piece.type,
           dir: piece.dir,
           color: piece.color || null,
-          shape: piece.shape || null
+          shape: piece.shape || null,
+          priorityMode: piece.priorityMode,
+          recipeId: piece.recipeId,
+          paintTank: piece.paintTank,
+          rootX: piece.rootX,
+          rootY: piece.rootY
         });
       }
     }
@@ -688,11 +736,12 @@ export class Grid {
   importUserPieces(piecesList) {
     if (!Array.isArray(piecesList)) return;
     for (const p of piecesList) {
-      if (!this.get(p.x, p.y)) {
+      const existing = this.get(p.x, p.y);
+      if (!existing || !existing.fixed) {
         let shape = p.shape || null;
-        if (p.type === 'extractor' && !shape) {
+        if (p.type === 'extractor') {
           const m = this.getMine(p.x, p.y);
-          if (m) shape = Shapes.clone(m.shape);
+          if (m && m.shape) shape = Shapes.clone(m.shape);
         }
         this.set(p.x, p.y, {
           x: p.x,
@@ -701,6 +750,11 @@ export class Grid {
           dir: p.dir,
           color: p.color || null,
           shape: shape,
+          priorityMode: p.priorityMode,
+          recipeId: p.recipeId,
+          paintTank: p.paintTank !== undefined ? p.paintTank : (p.type === 'painter' ? 6 : undefined),
+          rootX: p.rootX,
+          rootY: p.rootY,
           fixed: false
         });
       }
@@ -831,7 +885,11 @@ export class Simulation {
 
   update(dt, speedMult = 1.0) {
     const effectiveDt = dt * speedMult;
-    const beltSpeed = 1.5; // Celdas por segundo estándar (90 IPM)
+    const upgrades = this.game?.saveData?.upgrades || {};
+    const beltUpgradeMult = 1.0 + (upgrades.beltSpeed || 0) * 0.22;
+    const extractorUpgradeMult = 1.0 + (upgrades.extractorSpeed || 0) * 0.25;
+    const painterUpgradeMult = 1.0 + (upgrades.painterEfficiency || 0) * 0.25;
+    const beltSpeed = 1.5 * beltUpgradeMult; // Celdas por segundo mejorables
 
     // Limpiar micro-animaciones expiradas
     const nowMs = performance.now();
@@ -871,7 +929,7 @@ export class Simulation {
         const key = this.grid.key(piece.x, piece.y);
         let timer = (this.spawnerTimers.get(key) || 0) + effectiveDt;
 
-        const spawnInterval = 1.5; // Optimizado a 40 IPM por extractor
+        const spawnInterval = 1.45 / extractorUpgradeMult;
         if (timer >= spawnInterval) {
           timer = 0;
           const delta = DIR_DELTA[piece.dir];
@@ -942,10 +1000,37 @@ export class Simulation {
         continue;
       }
 
+      // Absorción de Materia Prima de Pintura (isPaintDrop) en Pintor o Hub Cruzado
+      if ((piece.type === 'painter' || piece.type === 'cross_hub') && item.shape && item.shape.isPaintDrop) {
+        item.progress += effectiveDt * tileSpeed * 2.2;
+        if (item.progress >= 0.35) {
+          const chargesPerDrop = 5 + (upgrades.painterEfficiency || 0) * 3;
+          piece.color = item.shape.paintColor || piece.color || PASTEL_COLORS.LAVENDER;
+          piece.paintTank = Math.min(30, (piece.paintTank !== undefined ? piece.paintTank : 4) + chargesPerDrop);
+          this.recordNodePass(piece.x, piece.y, nowSec);
+          this.triggerMachineAnim(piece.x, piece.y, 'painter_drop', {
+            color: piece.color,
+            dir: piece.dir
+          });
+          this.items.splice(i, 1);
+          this.rebuildSpatialIndex();
+        }
+        continue;
+      }
+
       // Cortadora y Pintor
       if (piece.type === 'cutter' || piece.type === 'painter') {
+        if (piece.type === 'painter') {
+          if (piece.paintTank === undefined) piece.paintTank = 4;
+          // Si el tanque de pigmento está vacío, la pieza espera en el centro hasta que llegue pintura de una Mena de Pintura
+          if (piece.paintTank <= 0 && !piece.infinitePaint) {
+            item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
+            continue;
+          }
+        }
+
         item.processingTimer = (item.processingTimer || 0) + effectiveDt;
-        const requiredTime = 0.45;
+        const requiredTime = piece.type === 'painter' ? (0.42 / painterUpgradeMult) : 0.45;
 
         if (item.processingTimer < requiredTime) {
           item.progress = Math.min(0.5, item.progress + effectiveDt * tileSpeed);
@@ -1414,8 +1499,12 @@ export class Simulation {
     }
 
     // Cortadora y Pintor
-    if (piece.type === 'cutter' || piece.type === 'painter') {
+    if (piece.type === 'cutter') {
       return incomingDir === piece.dir;
+    }
+    if (piece.type === 'painter') {
+      // Admite Formas por detrás y Gotas de Pintura por ambos laterales (o detrás)
+      return incomingDir !== OPPOSITE_DIR[piece.dir];
     }
     if (piece.type === 'cutter_part') {
       return false;
@@ -1447,6 +1536,9 @@ export class Simulation {
 
       if (nextPiece && this.canAcceptItem(nextPiece, piece.dir)) {
         if (!this.isCellEntryBlocked(outX, outY, 0.35)) {
+          if (!piece.infinitePaint && piece.paintTank !== undefined && piece.paintTank > 0) {
+            piece.paintTank = Math.max(0, piece.paintTank - 1);
+          }
           this.triggerMachineAnim(piece.x, piece.y, 'painter_drop', {
             color: paintColor,
             dir: piece.dir
@@ -1795,6 +1887,91 @@ export class Renderer {
     ctx.restore();
 
     this.drawParticles(ctx, dt);
+    this.drawMinimap(ctx);
+  }
+
+  drawMinimap(ctx) {
+    if (!this.grid || this.width < 360) return;
+    const isMobile = this.width <= 768;
+    const mapSize = isMobile ? 104 : 136;
+    const padX = 12;
+    const padY = isMobile ? (this.height - mapSize - 118) : (this.height - mapSize - 108);
+    if (padY < 70) return;
+
+    this.minimapRect = { x: padX, y: padY, size: mapSize, worldSpan: 48 };
+    const worldCenterX = 5;
+    const worldCenterY = 4;
+    const scale = mapSize / (this.minimapRect.worldSpan * 2);
+
+    ctx.save();
+    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.86)' : 'rgba(255, 255, 255, 0.92)';
+    ctx.strokeStyle = this.isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(15, 23, 42, 0.16)';
+    ctx.lineWidth = 1.5;
+
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(padX, padY, mapSize, mapSize, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.clip();
+    } else {
+      ctx.fillRect(padX, padY, mapSize, mapSize);
+      ctx.strokeRect(padX, padY, mapSize, mapSize);
+    }
+
+    const toMiniX = (gx) => padX + mapSize / 2 + (gx - worldCenterX) * scale;
+    const toMiniY = (gy) => padY + mapSize / 2 + (gy - worldCenterY) * scale;
+
+    // 1. Dibujar zonas de menas (formas y pinturas)
+    for (const mine of this.grid.getAllMines()) {
+      const mx = toMiniX(mine.x);
+      const my = toMiniY(mine.y);
+      if (mx < padX - 4 || mx > padX + mapSize + 4 || my < padY - 4 || my > padY + mapSize + 4) continue;
+      const isPaint = !!(mine.isPaintVein || (mine.shape && mine.shape.isPaintDrop));
+      const cName = isPaint ? mine.paintColor : (mine.shape?.left?.color || 'mint');
+      ctx.fillStyle = COLOR_HEX[cName] || '#A8D5BA';
+      ctx.fillRect(mx - 1.5, my - 1.5, 3.2, 3.2);
+    }
+
+    // 2. Dibujar construcciones y almacenes
+    for (const piece of this.grid.getAllPieces()) {
+      const px = toMiniX(piece.x);
+      const py = toMiniY(piece.y);
+      if (px < padX || px > padX + mapSize || py < padY || py > padY + mapSize) continue;
+      if (piece.type === 'delivery') {
+        ctx.fillStyle = '#10B981';
+        ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
+      } else if (!piece.fixed) {
+        ctx.fillStyle = this.isDark ? '#38BDF8' : '#0284C7';
+        ctx.fillRect(px - 1, py - 1, 2.2, 2.2);
+      }
+    }
+
+    // 3. Rectángulo del viewport actual de la cámara
+    const viewMinX = -this.camX / (this.tileSize * this.zoom);
+    const viewMinY = -this.camY / (this.tileSize * this.zoom);
+    const viewW = this.width / (this.tileSize * this.zoom);
+    const viewH = this.height / (this.tileSize * this.zoom);
+
+    const vx = toMiniX(viewMinX);
+    const vy = toMiniY(viewMinY);
+    const vw = viewW * scale;
+    const vh = viewH * scale;
+
+    ctx.strokeStyle = this.isDark ? '#F8FAFC' : '#0F172A';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(vx, vy, vw, vh);
+
+    // Etiqueta superior del radar
+    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.78)' : 'rgba(241, 245, 249, 0.9)';
+    ctx.fillRect(padX, padY, mapSize, 16);
+    ctx.fillStyle = this.isDark ? '#94A3B8' : '#475569';
+    ctx.font = '700 9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('RADAR DE MENAS (TOCA)', padX + mapSize / 2, padY + 8.5);
+
+    ctx.restore();
   }
 
   renderDemoScreensaver(ctx, dt) {
@@ -1850,8 +2027,13 @@ export class Renderer {
   drawMines(ctx, customGrid = null) {
     const grid = customGrid || this.grid;
     const s = this.tileSize;
+    const useFrustum = !customGrid && this.frustum;
 
     for (const mine of grid.getAllMines()) {
+      if (useFrustum && (mine.x < this.frustum.minCol - 1 || mine.x > this.frustum.maxCol + 1 || mine.y < this.frustum.minRow - 1 || mine.y > this.frustum.maxRow + 1)) {
+        continue;
+      }
+
       // Yacimientos naturales específicos de la Expansión Biomolecular & Cuántica
       if (mine.resourceType) {
         QuantumDLC.drawDeposit(this, ctx, mine, s);
@@ -1860,43 +2042,95 @@ export class Renderer {
 
       const cx = (mine.x + 0.5) * s;
       const cy = (mine.y + 0.5) * s;
-      const colorName = (mine.shape && mine.shape.left) ? mine.shape.left.color : 'mint';
+      const isPaint = !!(mine.isPaintVein || (mine.shape && mine.shape.isPaintDrop));
+      const colorName = isPaint ? (mine.paintColor || mine.shape?.paintColor || 'lavender') : ((mine.shape && mine.shape.left) ? mine.shape.left.color : 'mint');
       const hex = COLOR_HEX[colorName] || '#A8D5BA';
 
       ctx.save();
 
-      // 1. Halo suave y difuso que pulsa sutilmente sin fatiga
-      const pulse = Math.sin(performance.now() * 0.0028 + mine.x * 3 + mine.y * 2) * 2.2;
-      const haloGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, s * 0.52 + pulse);
-      haloGrad.addColorStop(0, `${hex}4D`);
-      haloGrad.addColorStop(0.6, `${hex}1F`);
-      haloGrad.addColorStop(1, `${hex}00`);
+      // 1. Placa geológica de Zona de Mena Grande (conecta visualmente las casillas contiguas de la veta)
+      ctx.fillStyle = this.isDark ? `${hex}22` : `${hex}2E`;
+      ctx.strokeStyle = `${hex}66`;
+      ctx.lineWidth = 1.4;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(mine.x * s + 1, mine.y * s + 1, s - 2, s - 2, 10);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(mine.x * s + 1, mine.y * s + 1, s - 2, s - 2);
+      }
 
-      ctx.fillStyle = haloGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.55 + pulse, 0, Math.PI * 2);
-      ctx.fill();
+      // 2. Base del yacimiento (Pozo líquido si es Mena de Pintura, o Veta mineral si es Forma)
+      const pulse = Math.sin(performance.now() * 0.003 + mine.x * 2 + mine.y * 2) * 2.0;
 
-      // 2. Base del yacimiento
-      ctx.fillStyle = this.isDark ? '#232933' : '#E8E3DA';
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.40, 0, Math.PI * 2);
-      ctx.fill();
+      if (isPaint) {
+        // Pozo de Pintura / Pigmento Líquido
+        ctx.fillStyle = this.isDark ? '#1A202C' : '#F8FAFC';
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.39, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Borde circular punteado relajante
-      ctx.strokeStyle = `${hex}88`;
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.40, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
+        ctx.fillStyle = `${hex}CC`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.31 + pulse * 0.35, 0, Math.PI * 2);
+        ctx.fill();
 
-      // 3. Si no hay extractor colocado encima, mostrar el cristal del recurso
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx - 3, cy - 3, s * 0.14, Math.PI * 0.8, Math.PI * 1.6);
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+      } else {
+        ctx.fillStyle = this.isDark ? '#232933' : '#F1F5F9';
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.39, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = `${hex}99`;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.39, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 3. Si no hay extractor colocado encima, mostrar el recurso o gota de pintura
       const pieceOnTop = grid.get(mine.x, mine.y);
       if (!pieceOnTop || pieceOnTop.type !== 'extractor') {
+        ctx.save();
         ctx.translate(cx, cy);
-        Shapes.draw(ctx, mine.shape, s * 0.28, this.isDark);
+        Shapes.draw(ctx, mine.shape, s * 0.27, this.isDark);
+        ctx.restore();
+      }
+
+      // 4. Etiqueta flotante de Zona de Mena en el nodo central del yacimiento
+      if (mine.clusterLabel && (!customGrid && this.zoom >= 0.42)) {
+        ctx.font = '700 9.5px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const label = mine.clusterLabel;
+        const lw = Math.max(64, label.length * 5.8 + 12);
+        const lh = 15;
+        const lx = cx - lw / 2;
+        const ly = mine.y * s - 11;
+
+        ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.94)';
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = 1.2;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(lx, ly, lw, lh, 6);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(lx, ly, lw, lh);
+        }
+        ctx.fillStyle = this.isDark ? '#F8FAFC' : '#0F172A';
+        ctx.fillText(label, cx, ly + lh / 2 + 0.5);
       }
 
       ctx.restore();
@@ -2595,25 +2829,47 @@ export class Renderer {
   }
 
   renderPainterTile(ctx, piece, s) {
-    const colorHex = COLOR_HEX[piece.color || 'lavender'];
+    const colorHex = COLOR_HEX[piece.color || 'lavender'] || '#C9B6E4';
     this.drawTileBase(ctx, s, '#352C3E', '#261F2E', '#F1EBF7', '#E0D4EC', 8);
+
+    // Boquillas laterales de entrada para Materia Prima de Pintura (Gotas de Pigmento)
+    ctx.fillStyle = this.isDark ? '#4A3B5C' : '#D2C0E8';
+    ctx.fillRect(-s * 0.14, -s / 2 + 2, s * 0.28, 6);
+    ctx.fillRect(-s * 0.14, s / 2 - 8, s * 0.28, 6);
 
     const time = performance.now() * 0.003;
     const dropPulse = 1.0 + Math.sin(time * 3.5) * 0.08;
 
     ctx.fillStyle = colorHex;
     ctx.beginPath();
-    ctx.arc(0, 0, s * 0.26 * dropPulse, 0, Math.PI * 2);
+    ctx.arc(0, 0, s * 0.24 * dropPulse, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = this.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Gotita superior
-    ctx.beginPath();
-    ctx.arc(0, -s * 0.26 * dropPulse * 0.85, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    // Barra de nivel del Tanque de Tinta (paintTank)
+    const tank = piece.paintTank !== undefined ? piece.paintTank : 6;
+    const maxTank = 20;
+    const fillRatio = Math.max(0, Math.min(1, tank / maxTank));
+    const barW = s * 0.56;
+    const barH = 4;
+    ctx.fillStyle = this.isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(15, 23, 42, 0.15)';
+    ctx.fillRect(-barW / 2, s * 0.28, barW, barH);
+    ctx.fillStyle = tank > 0 ? colorHex : '#EF4444';
+    ctx.fillRect(-barW / 2, s * 0.28, barW * fillRatio, barH);
+
+    // Si el tanque se quedó sin pintura, mostrar aviso claro
+    if (piece.paintTank !== undefined && piece.paintTank <= 0 && !piece.infinitePaint) {
+      ctx.save();
+      ctx.rotate(-(piece.dir || 0) * (Math.PI / 2));
+      ctx.fillStyle = '#EF4444';
+      ctx.font = '700 8.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💧SIN TINTA', 0, -s * 0.34);
+      ctx.restore();
+    }
 
     ctx.fillStyle = colorHex;
     ctx.beginPath();
@@ -3215,6 +3471,8 @@ export class Renderer {
 
       case 'painter':
         ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 2) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 3) % 4, isExit: false });
+        ports.push({ x: ghost.x, y: ghost.y, borderDir: (dir + 1) % 4, isExit: false });
         ports.push({ x: ghost.x, y: ghost.y, borderDir: dir, isExit: true });
         break;
 
@@ -3589,8 +3847,21 @@ export class InputManager {
 
   onPointerDown(e) {
     if (this.game && this.game.state === 'menu') {
-      this.game.startGameFromMenu();
       return;
+    }
+
+    // Clic o toque en el Radar de Menas (Minimapa) para desplazar la cámara al instante
+    if (this.game && this.game.renderer && this.game.renderer.minimapRect) {
+      const r = this.game.renderer.minimapRect;
+      if (e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h) {
+        const relX = (e.clientX - (r.x + r.w / 2)) / (r.w / 2);
+        const relY = (e.clientY - (r.y + r.h / 2)) / (r.h / 2);
+        const targetTileX = relX * r.worldRange;
+        const targetTileY = relY * r.worldRange;
+        this.game.renderer.centerOn(targetTileX, targetTileY);
+        this.game.audio?.playTone?.(540, 'sine', 0.04, 0.015);
+        return;
+      }
     }
 
     this.canvas.setPointerCapture(e.pointerId);
@@ -3808,7 +4079,6 @@ export class InputManager {
     this.canvas.classList.remove('grabbing');
 
     if (this.game && this.game.state === 'menu') {
-      this.game.startGameFromMenu();
       return;
     }
 
@@ -4108,53 +4378,71 @@ export class UIManager {
   }
 
   bindDOM() {
-    // 1. Menú Principal Split-Screen
-    document.getElementById('menu-btn-play')?.addEventListener('click', () => {
+    // 1. Menú Principal Split-Screen (con stopPropagation y control limpio de modales)
+    document.getElementById('menu-btn-play')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playPlaf();
       this.game.startGameFromMenu();
     });
 
-    document.getElementById('menu-btn-continue')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-continue')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playPlaf();
       this.game.startGameFromMenu();
     });
 
-    document.querySelector('.menu-preview-overlay')?.addEventListener('click', () => {
+    document.querySelector('.menu-preview-overlay')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Solo iniciar si no hay ningún modal superpuesto abierto
+      if (document.querySelector('.modal-overlay.active')) return;
       this.game.audio?.playPlaf?.();
       this.game.startGameFromMenu();
     });
 
-    document.getElementById('menu-btn-levels')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-levels')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleLevelsModal(true);
     });
 
-    document.getElementById('menu-btn-achievements')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-upgrades')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.game.audio.playTone(560, 'sine', 0.05, 0.02);
+      this.toggleUpgradesModal(true);
+    });
+
+    document.getElementById('menu-btn-achievements')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleAchievementsModal(true);
     });
 
-    document.getElementById('menu-btn-shop')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-shop')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleShopModal(true);
     });
 
-    document.getElementById('menu-btn-editor')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-editor')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleEditorModal(true);
     });
 
-    document.getElementById('menu-btn-settings')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-settings')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleSettingsModal(true);
     });
 
-    document.getElementById('menu-btn-credits')?.addEventListener('click', () => {
+    document.getElementById('menu-btn-credits')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playTone(520, 'sine', 0.05, 0.02);
       this.toggleCreditsModal(true);
     });
 
-    document.getElementById('btn-back-menu')?.addEventListener('click', () => {
+    document.getElementById('btn-back-menu')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.game.audio.playRotate();
       this.game.openMainMenu();
     });
@@ -4275,7 +4563,9 @@ export class UIManager {
     document.getElementById('btn-undo')?.addEventListener('click', () => this.game.undo());
     document.getElementById('btn-redo')?.addEventListener('click', () => this.game.redo());
 
-    // Botones de cierre de los nuevos modales
+    // Botones de cierre y apertura de los modales
+    document.getElementById('btn-upgrades-modal')?.addEventListener('click', () => this.toggleUpgradesModal(true));
+    document.getElementById('btn-close-upgrades')?.addEventListener('click', () => this.toggleUpgradesModal(false));
 
     document.getElementById('btn-close-achievements')?.addEventListener('click', () => this.toggleAchievementsModal(false));
     document.getElementById('btn-close-shop')?.addEventListener('click', () => this.toggleShopModal(false));
@@ -4974,11 +5264,22 @@ export class UIManager {
       { id: 'lemon', name: 'Limón', hex: '#F9E79F' }
     ];
 
+    const tankVal = piece ? (piece.paintTank !== undefined ? piece.paintTank : 6) : 8;
+
     let html = `
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+      <div style="padding: 10px 12px; border-radius: 8px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); margin-bottom: 12px; font-size: 12px; color: var(--text-bright);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong>💧 Tanque de Pigmento: ${tankVal} / 8</strong>
+          <button id="btn-refill-painter-now" style="padding: 3px 8px; border-radius: 6px; border: 1px solid #38BDF8; background: rgba(56, 189, 248, 0.2); color: var(--text-bright); cursor: pointer; font-size: 11px; font-weight: 700;">+ Recargar</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted);">
+          💡 Conecta un <strong>Extractor sobre una Mena de Pintura (🎨 TINTA)</strong> a los laterales del Pintor para suministrar materia prima automática y adoptar su color.
+        </div>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
         ${isCrossHub
           ? 'El Hub Cruzado fusiona la entrada trasera + izquierda y tiñe la pieza compuesta con el pigmento elegido:'
-          : 'Selecciona el color de pigmento con el que este pintor teñirá las piezas:'}
+          : 'Selecciona el color de pigmento (o aliméntalo desde una Mena de Pintura del mapa):'}
       </div>
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
     `;
@@ -5007,12 +5308,20 @@ export class UIManager {
 
     if (bodyEl) {
       bodyEl.innerHTML = html;
+      bodyEl.querySelector('#btn-refill-painter-now')?.addEventListener('click', () => {
+        if (piece) {
+          piece.paintTank = 8;
+          this.game.audio?.playPlaf?.();
+          this.openPainterSidebar(piece);
+        }
+      });
       const cards = bodyEl.querySelectorAll('.sidebar-color-card');
       cards.forEach(card => {
         card.addEventListener('click', () => {
           const color = card.dataset.color;
           if (piece) {
             piece.color = color;
+            piece.paintTank = 8;
           }
           this.game.painterColor = color;
           this.syncPainterColorSwatches(color);
@@ -5304,6 +5613,9 @@ export class UIManager {
     const coinsEl = document.getElementById('menu-coins');
     if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
 
+    const hudCoinsEl = document.getElementById('hud-coins-display');
+    if (hudCoinsEl) hudCoinsEl.textContent = `${coins} 🪙`;
+
     const continueBtn = document.getElementById('menu-btn-continue');
     const continueLabel = document.getElementById('menu-continue-label');
     if (continueBtn) {
@@ -5314,6 +5626,103 @@ export class UIManager {
         continueBtn.style.display = 'none';
       }
     }
+  }
+
+  toggleUpgradesModal(show) {
+    const modal = document.getElementById('upgrades-modal');
+    if (!modal) return;
+    if (show) {
+      this.populateUpgradesModal();
+      modal.classList.add('active');
+    } else {
+      modal.classList.remove('active');
+    }
+  }
+
+  populateUpgradesModal() {
+    const container = document.getElementById('upgrades-grid-container');
+    const coinsEl = document.getElementById('upgrades-coins-val');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const save = this.game.saveData;
+    save.upgrades = save.upgrades || { beltSpeed: 0, extractorSpeed: 0, painterEfficiency: 0, coinValue: 0 };
+    const coins = save.coins || 0;
+    if (coinsEl) coinsEl.textContent = `🪙 ${coins}`;
+
+    const upgradeDefs = [
+      {
+        id: 'beltSpeed',
+        icon: '⏩',
+        name: 'Turbopropulsión de Cintas',
+        desc: '+22% de velocidad de transporte en todas las cintas MK1, MK2 y MK3 por nivel.',
+        baseCost: 15,
+        maxLvl: 8
+      },
+      {
+        id: 'extractorSpeed',
+        icon: '⛏️',
+        name: 'Perforadoras de Alta Frecuencia',
+        desc: '+25% de velocidad de extracción en Menas de Formas y Menas de Pintura.',
+        baseCost: 20,
+        maxLvl: 8
+      },
+      {
+        id: 'painterEfficiency',
+        icon: '🎨',
+        name: 'Inyectores de Pigmento Turbo',
+        desc: '+30% de velocidad de teñido en Pintores y Hubs Cruzados.',
+        baseCost: 18,
+        maxLvl: 8
+      },
+      {
+        id: 'coinValue',
+        icon: '💰',
+        name: 'Contratos Corporativos VIP',
+        desc: '+1 🪙 moneda adicional en tiempo real por cada pieza entregada al Hub.',
+        baseCost: 25,
+        maxLvl: 6
+      }
+    ];
+
+    upgradeDefs.forEach(u => {
+      const currentLvl = save.upgrades[u.id] || 0;
+      const isMax = currentLvl >= u.maxLvl;
+      const cost = Math.round(u.baseCost * Math.pow(1.45, currentLvl));
+      const canAfford = coins >= cost;
+
+      const card = document.createElement('div');
+      card.className = `shop-item-card ${isMax ? 'equipped' : ''}`;
+      card.innerHTML = `
+        <div class="shop-item-header">
+          <span class="shop-item-name">${u.icon} ${u.name}</span>
+          <span class="shop-item-cost mono">NV. ${currentLvl}/${u.maxLvl}</span>
+        </div>
+        <p class="shop-item-desc">${u.desc}</p>
+        ${isMax
+          ? `<button class="shop-btn equipped-btn" disabled>Nivel Máximo Alcanzado ✓</button>`
+          : `<button class="shop-btn buy-action-btn ${canAfford ? '' : 'disabled'}">${canAfford ? `Mejorar por 🪙 ${cost}` : `Faltan 🪙 ${cost - coins}`}</button>`
+        }
+      `;
+
+      if (!isMax) {
+        card.querySelector('.buy-action-btn')?.addEventListener('click', () => {
+          if ((this.game.saveData.coins || 0) >= cost) {
+            this.game.saveData.coins -= cost;
+            this.game.saveData.upgrades[u.id] = currentLvl + 1;
+            this.game.audio?.playVictory?.();
+            this.game.autoSave();
+            this.updateMenuStats();
+            this.populateUpgradesModal();
+            this.showToast(`⚡ ¡${u.name} mejorado a Nivel ${currentLvl + 1}!`, 2000);
+          } else {
+            this.showToast(`Entrega más piezas al Hub para ganar 🪙 monedas`, 1800);
+          }
+        });
+      }
+
+      container.appendChild(card);
+    });
   }
 
   toggleAchievementsModal(show) {
@@ -5557,8 +5966,11 @@ export class BeltFlowGame {
     this.deliveredCount = 0;
     this.timeElapsed = 0;
 
-    // Estado de juego: 'playing' directamente para interactuar de inmediato
-    this.state = 'playing';
+    // Estado inicial: si el menú principal está visible en el DOM, empezamos en 'menu'
+    const menuEl = document.getElementById('main-menu-screen');
+    const isMenuVisible = menuEl && (menuEl.classList.contains('open') || menuEl.classList.contains('visible'));
+    this.state = isMenuVisible ? 'menu' : 'playing';
+    document.body.classList.toggle('in-menu', this.state === 'menu');
 
     // Sistema de vidas, racha y estadísticas
     this.lives = 5;
@@ -5582,11 +5994,12 @@ export class BeltFlowGame {
     this.gameMode = this.saveData.gameMode || 'relaxed';
     this.ambientTimer = 0;
 
-    // Circuito procedural relajante de fondo para el Menú
+    // Circuito procedural relajante y fluido de fondo para el Menú
     this.initDemoScene();
 
     const canvas = document.getElementById('game-canvas');
     this.sim = new Simulation(this.grid, (shape, deliveryPiece) => this.onShapeDelivered(shape, deliveryPiece));
+    this.sim.game = this;
     this.renderer = new Renderer(canvas, this.grid, this.sim);
     this.renderer.game = this;
     this.input = new InputManager(canvas, this);
@@ -5611,36 +6024,75 @@ export class BeltFlowGame {
   initDemoScene() {
     this.demoGrid = new Grid();
     this.demoSim = new Simulation(this.demoGrid);
+    this.demoSim.game = this;
 
-    // Mini-fábrica relajante en bucle:
-    // Mina circular en (1, 2)
-    this.demoGrid.setMine(1, 2, { x: 1, y: 2, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) });
-    // Extractor sobre la mina
-    this.demoGrid.set(1, 2, {
-      x: 1, y: 2, type: 'extractor', dir: DIR.RIGHT,
+    // 1. Veta Grande de Formas (2x2) en (1..2, 1..2)
+    for (let dx = 0; dx < 2; dx++) {
+      for (let dy = 0; dy < 2; dy++) {
+        this.demoGrid.setMine(1 + dx, 1 + dy, {
+          x: 1 + dx,
+          y: 1 + dy,
+          shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT)
+        });
+      }
+    }
+
+    // 2. Veta Grande de Pintura Lavanda (2x2) en (3..4, 0..1)
+    for (let dx = 0; dx < 2; dx++) {
+      for (let dy = 0; dy < 2; dy++) {
+        this.demoGrid.setMine(3 + dx, 0 + dy, {
+          x: 3 + dx,
+          y: 0 + dy,
+          isPaintVein: true,
+          paintColor: PASTEL_COLORS.LAVENDER,
+          shape: createPaintDrop(PASTEL_COLORS.LAVENDER)
+        });
+      }
+    }
+
+    // Línea Superior: Extractor de Formas -> Cinta -> Pintor alimentado por Mena de Pintura -> Hub Receptor
+    this.demoGrid.set(2, 2, {
+      x: 2, y: 2, type: 'extractor', dir: DIR.RIGHT,
       shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true
     });
-    // Cintas hacia la derecha
-    this.demoGrid.set(2, 2, { x: 2, y: 2, type: 'belt', dir: DIR.RIGHT, fixed: true });
-    // Pintor lavanda
-    this.demoGrid.set(3, 2, { x: 3, y: 2, type: 'painter', dir: DIR.RIGHT, color: PASTEL_COLORS.LAVENDER, fixed: true });
-    this.demoGrid.set(4, 2, { x: 4, y: 2, type: 'belt', dir: DIR.RIGHT, fixed: true });
-    // Cortadora
-    this.demoGrid.set(5, 2, { x: 5, y: 2, type: 'cutter', dir: DIR.RIGHT, fixed: true });
-    // Salida frontal hacia abajo
-    this.demoGrid.set(6, 2, { x: 6, y: 2, type: 'belt', dir: DIR.DOWN, fixed: true });
-    this.demoGrid.set(6, 3, { x: 6, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
-    // Salida derecha de la cortadora ya apunta a (5, 3)
-    this.demoGrid.set(5, 3, { x: 5, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
-    // Mezcladora
-    this.demoGrid.set(4, 3, { x: 4, y: 3, type: 'mixer', dir: DIR.LEFT, fixed: true });
-    this.demoGrid.set(3, 3, { x: 3, y: 3, type: 'belt', dir: DIR.LEFT, fixed: true });
-    // Almacén receptor
-    this.demoGrid.set(2, 3, { x: 2, y: 3, type: 'delivery', dir: DIR.LEFT, fixed: true });
+    this.demoGrid.set(3, 2, { x: 3, y: 2, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
+
+    // Extractor de Pintura en (4, 1) inyectando gotas de tinte hacia abajo al Pintor en (4, 2)
+    this.demoGrid.set(4, 1, {
+      x: 4, y: 1, type: 'extractor', dir: DIR.DOWN,
+      shape: createPaintDrop(PASTEL_COLORS.LAVENDER), fixed: true
+    });
+    this.demoGrid.set(4, 2, {
+      x: 4, y: 2, type: 'painter', dir: DIR.RIGHT,
+      color: PASTEL_COLORS.LAVENDER, paintTank: 8, fixed: true
+    });
+    this.demoGrid.set(5, 2, { x: 5, y: 2, type: 'belt_hyper', dir: DIR.RIGHT, fixed: true });
+    this.demoGrid.set(6, 2, { x: 6, y: 2, type: 'belt_hyper', dir: DIR.DOWN, fixed: true });
+    this.demoGrid.set(6, 3, { x: 6, y: 3, type: 'delivery', dir: DIR.DOWN, fixed: true });
+
+    // Línea Inferior: Veta de Estrellas Coral (2x2) en (1..2, 4..5) -> Cintas MK2 -> Hub Receptor
+    for (let dx = 0; dx < 2; dx++) {
+      for (let dy = 0; dy < 2; dy++) {
+        this.demoGrid.setMine(1 + dx, 4 + dy, {
+          x: 1 + dx,
+          y: 4 + dy,
+          shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.PEACH)
+        });
+      }
+    }
+    this.demoGrid.set(2, 4, {
+      x: 2, y: 4, type: 'extractor', dir: DIR.RIGHT,
+      shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.PEACH), fixed: true
+    });
+    this.demoGrid.set(3, 4, { x: 3, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
+    this.demoGrid.set(4, 4, { x: 4, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
+    this.demoGrid.set(5, 4, { x: 5, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
+    this.demoGrid.set(6, 4, { x: 6, y: 4, type: 'belt_fast', dir: DIR.UP, fixed: true });
   }
 
   startGameFromMenu() {
     this.state = 'playing';
+    document.body.classList.remove('in-menu');
     const menuScreen = document.getElementById('main-menu-screen');
     if (menuScreen) {
       menuScreen.classList.remove('open', 'visible');
@@ -5657,6 +6109,7 @@ export class BeltFlowGame {
 
   openMainMenu() {
     this.state = 'menu';
+    document.body.classList.add('in-menu');
     const menuScreen = document.getElementById('main-menu-screen');
     if (menuScreen) {
       menuScreen.style.display = 'flex';
@@ -5740,7 +6193,96 @@ export class BeltFlowGame {
     }
   }
 
+  // Expande una casilla de mina en un gran yacimiento multi-casilla (2x2 o 3x2) sin pisar piezas fijas
+  expandMineCluster(cx, cy, mineTemplate, width = 2, height = 2) {
+    for (let dx = 0; dx < width; dx++) {
+      for (let dy = 0; dy < height; dy++) {
+        const mx = cx + dx;
+        const my = cy + dy;
+        const existingCell = this.grid.get(mx, my);
+        if (existingCell && existingCell.fixed && existingCell.type !== 'extractor') continue;
+        if (!this.grid.hasMine(mx, my)) {
+          this.grid.setMine(mx, my, {
+            x: mx,
+            y: my,
+            isPaintVein: !!mineTemplate.isPaintVein,
+            paintColor: mineTemplate.paintColor || null,
+            shape: Shapes.clone(mineTemplate.shape)
+          });
+        }
+      }
+    }
+  }
+
+  // Genera un Mundo Gigante repleto de grandes Yacimientos de Formas y Menas de Pintura para conectar
+  populateMegaMapVeins(lvl) {
+    // 1. Menas de Pintura cercanas a la base central para que el jugador siempre tenga pigmentos a mano
+    const nearPaintClusters = [
+      { x: 3, y: -4, w: 3, h: 2, color: PASTEL_COLORS.LAVENDER },
+      { x: 3, y: 7, w: 3, h: 2, color: PASTEL_COLORS.MINT },
+      { x: -5, y: -3, w: 2, h: 3, color: PASTEL_COLORS.CORAL },
+      { x: -5, y: 6, w: 2, h: 3, color: PASTEL_COLORS.SKY },
+      { x: 11, y: -3, w: 3, h: 2, color: PASTEL_COLORS.LEMON }
+    ];
+
+    for (const pc of nearPaintClusters) {
+      this.expandMineCluster(pc.x, pc.y, {
+        isPaintVein: true,
+        paintColor: pc.color,
+        shape: createPaintDrop(pc.color)
+      }, pc.w, pc.h);
+    }
+
+    // 2. Grandes Yacimientos en el Mega-Mapa Exterior (-45..+55) para expandir una Mega-Fábrica adictiva
+    const outerVeins = [
+      // Anillo Medio (14 a 26 casillas)
+      { x: -14, y: -10, w: 3, h: 3, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) },
+      { x: -16, y: 4, w: 3, h: 3, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY) },
+      { x: -12, y: 15, w: 3, h: 3, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER) },
+      { x: 4, y: -14, w: 4, h: 2, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.PEACH) },
+      { x: 16, y: -11, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER },
+      { x: 20, y: 2, w: 3, h: 3, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL) },
+      { x: 18, y: 12, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.MINT },
+      { x: 6, y: 16, w: 4, h: 3, shape: createShape(SHAPE_TYPES.HEXAGON, PASTEL_COLORS.SKY) },
+      { x: -4, y: -16, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL },
+      { x: 14, y: -4, w: 3, h: 2, isPaintVein: true, paintColor: PASTEL_COLORS.SKY },
+
+      // Anillo Exterior Lejano (28 a 50 casillas: Mega-Yacimientos 4x3 y 4x4)
+      { x: -30, y: -22, w: 4, h: 4, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LEMON) },
+      { x: -32, y: -4, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON },
+      { x: -28, y: 18, w: 4, h: 4, shape: createShape(SHAPE_TYPES.WINDMILL, PASTEL_COLORS.LAVENDER) },
+      { x: 0, y: -28, w: 4, h: 4, shape: createShape(SHAPE_TYPES.CROSS, PASTEL_COLORS.MINT) },
+      { x: 28, y: -22, w: 4, h: 4, shape: createShape(SHAPE_TYPES.HEART, PASTEL_COLORS.CORAL) },
+      { x: 34, y: -4, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER },
+      { x: 32, y: 16, w: 4, h: 4, shape: createShape(SHAPE_TYPES.LIGHTNING, PASTEL_COLORS.LEMON) },
+      { x: 2, y: 30, w: 4, h: 4, shape: createShape(SHAPE_TYPES.LEAF, PASTEL_COLORS.MINT) },
+      { x: -18, y: 28, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.SKY },
+      { x: 20, y: -28, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL }
+    ];
+
+    for (const v of outerVeins) {
+      if (v.isPaintVein) {
+        this.expandMineCluster(v.x, v.y, {
+          isPaintVein: true,
+          paintColor: v.paintColor,
+          shape: createPaintDrop(v.paintColor)
+        }, v.w, v.h);
+      } else {
+        this.expandMineCluster(v.x, v.y, {
+          isPaintVein: false,
+          shape: v.shape
+        }, v.w, v.h);
+      }
+    }
+  }
+
   loadLevel(levelId) {
+    // 1. PERSISTENCIA DE MEGA-FÁBRICA: conservar todas las piezas construidas por el jugador al pasar de nivel
+    const currentUserPieces = this.grid.exportUserPieces();
+    if (currentUserPieces.length > 0) {
+      this.saveData.megaFactoryPieces = currentUserPieces;
+    }
+
     const lvl = LEVELS.find(l => l.id === levelId) || LEVELS[0];
     this.currentLevel = lvl;
     this.deliveredCount = 0;
@@ -5751,7 +6293,13 @@ export class BeltFlowGame {
     this.totalErrors = 0;
     this.isPaused = false;
     this.sim.reset();
-    this.grid.cells.clear();
+
+    // Limpiar únicamente las piezas fijas del nivel anterior y regenerar las menas
+    for (const [k, cell] of this.grid.cells.entries()) {
+      if (cell.fixed) {
+        this.grid.cells.delete(k);
+      }
+    }
     this.grid.mines.clear();
 
     // Normalizar demandas del nivel
@@ -5772,15 +6320,15 @@ export class BeltFlowGame {
       this.totalQuota = lvl.quota;
     }
 
-    // Registrar piezas fijas y depósitos de minas
+    // Registrar piezas fijas del nivel y expandir cada mina en una ZONA GRANDE (2x2)
     if (lvl.fixedGrid) {
       for (const item of lvl.fixedGrid) {
         if (item.type === 'mine') {
-          this.grid.setMine(item.x, item.y, {
-            x: item.x,
-            y: item.y,
+          this.expandMineCluster(item.x, item.y, {
+            isPaintVein: !!item.isPaintVein,
+            paintColor: item.paintColor || null,
             shape: Shapes.clone(item.shape)
-          });
+          }, 2, 2);
         } else {
           this.grid.set(item.x, item.y, {
             x: item.x,
@@ -5797,14 +6345,35 @@ export class BeltFlowGame {
       }
     }
 
-    // Asegurar que el extractor está disponible en los componentes
-    if (!lvl.availableTools.includes('extractor')) {
-      lvl.availableTools.push('extractor');
+    // Poblar el Mega-Mapa con múltiples zonas grandes de Menas de Formas y Menas de Pintura
+    this.populateMegaMapVeins(lvl);
+
+    // Desbloquear herramientas clave para que el jugador pueda conectar su Mega-Fábrica libremente
+    const baseTools = ['belt', 'belt_fast', 'extractor', 'painter', 'cutter', 'splitter', 'merger', 'tunnel', 'trash'];
+    for (const t of baseTools) {
+      if (!lvl.availableTools.includes(t)) {
+        lvl.availableTools.push(t);
+      }
     }
 
-    const savedBuildings = this.saveData.construcciones[lvl.id];
-    if (savedBuildings) {
-      this.grid.importUserPieces(savedBuildings);
+    // Restaurar la Mega-Fábrica persistente del jugador (si aún no había nada en memoria, cargar de saveData)
+    if (this.grid.exportUserPieces().length === 0) {
+      const savedMega = (this.saveData.megaFactoryPieces && this.saveData.megaFactoryPieces.length > 0)
+        ? this.saveData.megaFactoryPieces
+        : this.saveData.construcciones[lvl.id];
+      if (savedMega) {
+        this.grid.importUserPieces(savedMega);
+      }
+    }
+
+    // Actualizar extractores colocados por el jugador para que sincronicen con la mena bajo ellos
+    for (const piece of this.grid.getAllPieces()) {
+      if (piece.type === 'extractor' && !piece.fixed) {
+        const mine = this.grid.getMine(piece.x, piece.y);
+        if (mine) {
+          piece.shape = Shapes.clone(mine.shape);
+        }
+      }
     }
 
     this.undoStack = [];
@@ -5826,7 +6395,10 @@ export class BeltFlowGame {
     this.ui.setPlayPauseIcon(this.isPaused);
     this.ui.setSpeedText(this.speedMult);
 
-    this.centerCameraOnLevel();
+    if (!this.hasCenteredOnce) {
+      this.centerCameraOnLevel();
+      this.hasCenteredOnce = true;
+    }
     this.updateGhost();
   }
 
@@ -6434,6 +7006,7 @@ export class BeltFlowGame {
       type: this.selectedTool,
       dir: this.placementDir,
       color: (this.selectedTool === 'painter' || this.selectedTool === 'filter' || this.selectedTool === 'cross_hub') ? this.painterColor : null,
+      paintTank: (this.selectedTool === 'painter' || this.selectedTool === 'cross_hub') ? 5 : undefined,
       priorityMode: this.selectedTool === 'splitter' ? (this.defaultSplitterMode || 'balanced') : undefined,
       shape: null,
       fixed: false
@@ -6482,7 +7055,7 @@ export class BeltFlowGame {
   }
 
   setZoom(newZoom, centerX, centerY) {
-    const clamped = Math.max(0.6, Math.min(2.2, newZoom));
+    const clamped = Math.max(0.28, Math.min(2.2, newZoom));
     if (centerX !== undefined && centerY !== undefined) {
       const worldPos = this.renderer.screenToWorld(centerX, centerY);
       this.renderer.zoom = clamped;
@@ -6525,6 +7098,8 @@ export class BeltFlowGame {
 
   onShapeDelivered(shape, deliveryPiece) {
     if (!this.currentDemands) return;
+    // Ignorar gotas de pintura pura si entran por accidente al Hub
+    if (shape && shape.isPaintDrop) return;
 
     const dIdx = deliveryPiece.deliveryIndex !== undefined 
       ? deliveryPiece.deliveryIndex 
@@ -6552,10 +7127,17 @@ export class BeltFlowGame {
       this.totalDelivered++;
       this.streak++;
 
+      // Recompensa adictiva en tiempo real: Monedas por cada entrega exitosa
+      const coinBonus = 2 + (this.saveData.upgrades?.coinValue || 0);
+      this.saveData.coins = (this.saveData.coins || 0) + coinBonus;
+      const hudCoinsEl = document.getElementById('hud-coins-display');
+      if (hudCoinsEl) hudCoinsEl.textContent = `${this.saveData.coins} 🪙`;
+
       if (this.streak > 0 && this.streak % 10 === 0) {
         this.audio.playStreak();
         this.renderer.addParticles(screenPos.x, screenPos.y, 25, '#F5C6A5');
-        this.ui.showToast(`✨ ¡Racha x${this.streak} perfecta!`, 1800);
+        this.ui.showToast(`✨ ¡Racha x${this.streak} perfecta! (+${coinBonus * 2} 🪙)`, 1800);
+        this.saveData.coins += coinBonus;
       } else {
         this.audio.playDelivery();
         this.renderer.addParticles(screenPos.x, screenPos.y, 14, '#A8D5BA');
@@ -6844,14 +7426,17 @@ export class BeltFlowGame {
   }
 
   autoSave() {
+    const exported = this.grid.exportUserPieces();
+    this.saveData.megaFactoryPieces = exported;
     if (this.currentLevel) {
-      this.saveData.construcciones[this.currentLevel.id] = this.grid.exportUserPieces();
+      this.saveData.construcciones[this.currentLevel.id] = exported;
     }
     SaveManager.save(this.saveData);
   }
 
   resetAllProgress() {
     this.saveData = SaveManager.reset();
+    this.grid.clearNonFixed();
     this.loadLevel(1);
     this.ui.toggleSettingsModal(false);
     this.ui.updateMenuStats();
@@ -6903,7 +7488,8 @@ export class BeltFlowGame {
       }
     }
 
-    this.renderer.render(dt, (this.state === 'menu' || this.isPaused) ? 0 : this.speedMult);
+    const renderSpeed = this.state === 'menu' ? 1.0 : (this.isPaused ? 0 : this.speedMult);
+    this.renderer.render(dt, renderSpeed);
 
     requestAnimationFrame((t) => this.gameLoop(t));
   }
