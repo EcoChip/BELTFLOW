@@ -684,7 +684,7 @@ export class Grid {
   }
 
   inBounds(x, y) {
-    return x >= -120 && x <= 120 && y >= -120 && y <= 120;
+    return x >= -260 && x <= 260 && y >= -260 && y <= 260;
   }
 
   remove(x, y) {
@@ -1900,19 +1900,30 @@ export class Renderer {
   drawMinimap(ctx) {
     if (!this.grid || this.width < 360) return;
     const isMobile = this.width <= 768;
-    const mapSize = isMobile ? 104 : 136;
+    const mapSize = isMobile ? 114 : 154;
     const padX = 12;
     const padY = isMobile ? (this.height - mapSize - 118) : (this.height - mapSize - 108);
     if (padY < 70) return;
 
-    this.minimapRect = { x: padX, y: padY, size: mapSize, worldSpan: 48 };
     const worldCenterX = 5;
-    const worldCenterY = 4;
-    const scale = mapSize / (this.minimapRect.worldSpan * 2);
+    const worldCenterY = 2;
+    const worldRange = 145;
+    this.minimapRect = {
+      x: padX,
+      y: padY,
+      w: mapSize,
+      h: mapSize,
+      size: mapSize,
+      worldRange,
+      worldSpan: worldRange,
+      centerX: worldCenterX,
+      centerY: worldCenterY
+    };
+    const scale = mapSize / (worldRange * 2);
 
     ctx.save();
-    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.86)' : 'rgba(255, 255, 255, 0.92)';
-    ctx.strokeStyle = this.isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(15, 23, 42, 0.16)';
+    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.94)';
+    ctx.strokeStyle = this.isDark ? 'rgba(56, 189, 248, 0.42)' : 'rgba(15, 23, 42, 0.22)';
     ctx.lineWidth = 1.5;
 
     if (ctx.roundRect) {
@@ -1929,32 +1940,46 @@ export class Renderer {
     const toMiniX = (gx) => padX + mapSize / 2 + (gx - worldCenterX) * scale;
     const toMiniY = (gy) => padY + mapSize / 2 + (gy - worldCenterY) * scale;
 
-    // 1. Dibujar zonas de menas (formas y pinturas)
+    // 1. Dibujar anillos guía de distancia logística alrededor del Almacén 3x3
+    ctx.strokeStyle = this.isDark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(15, 23, 42, 0.07)';
+    ctx.lineWidth = 1;
+    [35, 75, 120].forEach(rad => {
+      ctx.beginPath();
+      ctx.arc(padX + mapSize / 2, padY + mapSize / 2, rad * scale, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // 2. Dibujar zonas de menas (formas, pinturas y cuánticas)
     for (const mine of this.grid.getAllMines()) {
       const mx = toMiniX(mine.x);
       const my = toMiniY(mine.y);
       if (mx < padX - 4 || mx > padX + mapSize + 4 || my < padY - 4 || my > padY + mapSize + 4) continue;
       const isPaint = !!(mine.isPaintVein || (mine.shape && mine.shape.isPaintDrop));
       const cName = isPaint ? mine.paintColor : (mine.shape?.left?.color || 'mint');
-      ctx.fillStyle = COLOR_HEX[cName] || '#A8D5BA';
-      ctx.fillRect(mx - 1.5, my - 1.5, 3.2, 3.2);
+      ctx.fillStyle = mine.resourceType ? '#C084FC' : (COLOR_HEX[cName] || '#A8D5BA');
+      ctx.fillRect(mx - 1.4, my - 1.4, 2.8, 2.8);
     }
 
-    // 2. Dibujar construcciones y almacenes
+    // 3. Dibujar construcciones y el Almacén Central 3x3
     for (const piece of this.grid.getAllPieces()) {
       const px = toMiniX(piece.x);
       const py = toMiniY(piece.y);
       if (px < padX || px > padX + mapSize || py < padY || py > padY + mapSize) continue;
       if (piece.type === 'delivery') {
-        ctx.fillStyle = '#10B981';
-        ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
+        if (piece.isHubCenter || piece.hubRootX === undefined) {
+          ctx.fillStyle = '#10B981';
+          ctx.fillRect(px - 4, py - 4, 8, 8);
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px - 4, py - 4, 8, 8);
+        }
       } else if (!piece.fixed) {
         ctx.fillStyle = this.isDark ? '#38BDF8' : '#0284C7';
-        ctx.fillRect(px - 1, py - 1, 2.2, 2.2);
+        ctx.fillRect(px - 0.9, py - 0.9, 1.8, 1.8);
       }
     }
 
-    // 3. Rectángulo del viewport actual de la cámara
+    // 4. Rectángulo del viewport actual de la cámara
     const viewMinX = -this.camX / (this.tileSize * this.zoom);
     const viewMinY = -this.camY / (this.tileSize * this.zoom);
     const viewW = this.width / (this.tileSize * this.zoom);
@@ -1962,21 +1987,21 @@ export class Renderer {
 
     const vx = toMiniX(viewMinX);
     const vy = toMiniY(viewMinY);
-    const vw = viewW * scale;
-    const vh = viewH * scale;
+    const vw = Math.max(4, viewW * scale);
+    const vh = Math.max(4, viewH * scale);
 
     ctx.strokeStyle = this.isDark ? '#F8FAFC' : '#0F172A';
     ctx.lineWidth = 1.2;
     ctx.strokeRect(vx, vy, vw, vh);
 
     // Etiqueta superior del radar
-    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.78)' : 'rgba(241, 245, 249, 0.9)';
+    ctx.fillStyle = this.isDark ? 'rgba(15, 23, 42, 0.82)' : 'rgba(241, 245, 249, 0.92)';
     ctx.fillRect(padX, padY, mapSize, 16);
-    ctx.fillStyle = this.isDark ? '#94A3B8' : '#475569';
-    ctx.font = '700 9px "JetBrains Mono", monospace';
+    ctx.fillStyle = this.isDark ? '#38BDF8' : '#0284C7';
+    ctx.font = '700 8.5px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('RADAR DE MENAS (TOCA)', padX + mapSize / 2, padY + 8.5);
+    ctx.fillText('MAPA MUNDIAL (TOCA PARA IR)', padX + mapSize / 2, padY + 8.5);
 
     ctx.restore();
   }
@@ -2191,25 +2216,18 @@ export class Renderer {
     if (deliveryPieces.length === 0) return;
 
     for (const piece of deliveryPieces) {
-      const dIdx = piece.deliveryIndex;
-      const isSecondary = piece.secondary;
+      // Si forma parte del Almacén Central 3x3, dibujar únicamente 1 cartel sobre el núcleo central
+      if (piece.hubRootX !== undefined && !piece.isHubCenter) continue;
 
-      const matchingDemands = this.game.currentDemands.filter(d => {
-        if (d.deliveryIndex !== undefined) {
-          if (dIdx !== undefined && d.deliveryIndex !== dIdx) return false;
-          if (dIdx === undefined && isSecondary && d.deliveryIndex === 0) return false;
-          if (dIdx === undefined && !isSecondary && d.deliveryIndex === 1) return false;
-        }
-        return true;
-      });
-
-      if (matchingDemands.length === 0) continue;
+      const matchingDemands = this.game.currentDemands;
+      if (!matchingDemands || matchingDemands.length === 0) continue;
 
       const cx = (piece.x + 0.5) * s;
-      const cy = piece.y * s - 16;
+      const topTileY = piece.isHubCenter ? (piece.y - 1) : piece.y;
+      const cy = topTileY * s - 18;
 
-      const badgeWidth = Math.max(56, matchingDemands.length * 48 + 12);
-      const badgeHeight = 22;
+      const badgeWidth = Math.max(68, matchingDemands.length * 54 + 14);
+      const badgeHeight = 24;
       const bx = cx - badgeWidth / 2;
       const by = cy - badgeHeight / 2;
 
@@ -2482,7 +2500,7 @@ export class Renderer {
         this.renderTunnelTile(ctx, s);
         break;
       case 'delivery':
-        this.renderDeliveryTile(ctx, s);
+        this.renderDeliveryTile(ctx, piece, s);
         break;
       case 'obstacle':
       case 'rock':
@@ -2915,7 +2933,144 @@ export class Renderer {
     ctx.fill();
   }
 
-  renderDeliveryTile(ctx, s) {
+  renderDeliveryTile(ctx, piece, s) {
+    // Si es parte del Almacén Central 3x3 pero no es la casilla central, el núcleo central dibuja toda la estructura 3x3
+    if (piece && piece.hubRootX !== undefined && !piece.isHubCenter) {
+      return;
+    }
+
+    // Si es el núcleo central del Almacén 3x3 (cubre de -1.5*s a +1.5*s con 12 bocas de entrada)
+    if (piece && piece.isHubCenter) {
+      const totalS = s * 3;
+      const half = totalS / 2;
+      const isDark = this.isDark;
+      const time = performance.now() * 0.0025;
+
+      ctx.save();
+      // Deshacer rotación por si acaso
+      if (piece.dir) {
+        ctx.rotate(-piece.dir * (Math.PI / 2));
+      }
+
+      // 1. Plataforma industrial 3x3
+      const grad = ctx.createLinearGradient(-half, -half, half, half);
+      if (isDark) {
+        grad.addColorStop(0, '#132A23');
+        grad.addColorStop(1, '#0B1915');
+      } else {
+        grad.addColorStop(0, '#E6F7ED');
+        grad.addColorStop(1, '#C6EBDA');
+      }
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = isDark ? '#10B981' : '#059669';
+      ctx.lineWidth = 2.6;
+
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(-half + 2, -half + 2, totalS - 4, totalS - 4, 16);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(-half + 2, -half + 2, totalS - 4, totalS - 4);
+        ctx.strokeRect(-half + 2, -half + 2, totalS - 4, totalS - 4);
+      }
+
+      // 2. Las 12 Bocas de Entrada (3 Norte, 3 Sur, 3 Oeste, 3 Este)
+      const portOffsets = [-s, 0, s];
+      const portW = s * 0.54;
+      const portDepth = 11;
+      const portColor = isDark ? '#1E3F35' : '#A7F3D0';
+      const arrowColor = isDark ? '#34D399' : '#047857';
+      const animShift = (this.beltAnimOffset % 1.0) * 5;
+
+      ctx.fillStyle = portColor;
+      ctx.strokeStyle = arrowColor;
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+
+      for (const ofs of portOffsets) {
+        // Norte (entra hacia abajo +Y)
+        ctx.fillRect(ofs - portW / 2, -half + 2, portW, portDepth);
+        ctx.beginPath();
+        ctx.moveTo(ofs - 4, -half + 5 + animShift);
+        ctx.lineTo(ofs, -half + 10 + animShift);
+        ctx.lineTo(ofs + 4, -half + 5 + animShift);
+        ctx.stroke();
+
+        // Sur (entra hacia arriba -Y)
+        ctx.fillRect(ofs - portW / 2, half - 2 - portDepth, portW, portDepth);
+        ctx.beginPath();
+        ctx.moveTo(ofs - 4, half - 5 - animShift);
+        ctx.lineTo(ofs, half - 10 - animShift);
+        ctx.lineTo(ofs + 4, half - 5 - animShift);
+        ctx.stroke();
+
+        // Oeste (entra hacia la derecha +X)
+        ctx.fillRect(-half + 2, ofs - portW / 2, portDepth, portW);
+        ctx.beginPath();
+        ctx.moveTo(-half + 5 + animShift, ofs - 4);
+        ctx.lineTo(-half + 10 + animShift, ofs);
+        ctx.lineTo(-half + 5 + animShift, ofs + 4);
+        ctx.stroke();
+
+        // Este (entra hacia la izquierda -X)
+        ctx.fillRect(half - 2 - portDepth, ofs - portW / 2, portDepth, portW);
+        ctx.beginPath();
+        ctx.moveTo(half - 5 - animShift, ofs - 4);
+        ctx.lineTo(half - 10 - animShift, ofs);
+        ctx.lineTo(half - 5 - animShift, ofs + 4);
+        ctx.stroke();
+      }
+
+      // 3. Anillo del Vórtice Central del Almacén 3x3
+      ctx.fillStyle = isDark ? 'rgba(6, 78, 59, 0.55)' : 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.88, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.rotate(time);
+      ctx.strokeStyle = isDark ? '#34D399' : '#10B981';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.84, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 4. Mostrar la Forma Objetivo actual y el contador en el corazón del Almacén 3x3
+      const activeDemand = this.game?.currentDemands?.find(d => d.delivered < d.quota) || this.game?.currentDemands?.[0];
+      if (activeDemand && activeDemand.shape) {
+        ctx.save();
+        ctx.translate(0, -s * 0.16);
+        Shapes.draw(ctx, activeDemand.shape, s * 0.42, isDark);
+        ctx.restore();
+
+        ctx.font = '800 12px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isDark ? '#ECFDF5' : '#064E3B';
+        const deliv = this.game?.deliveredCount || 0;
+        const quota = this.game?.totalQuota || activeDemand.quota || 0;
+        ctx.fillText(`${deliv}/${quota}`, 0, s * 0.46);
+      } else {
+        ctx.font = '800 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isDark ? '#A7F3D0' : '#047857';
+        ctx.fillText('HUB 3×3', 0, 0);
+      }
+
+      // Etiqueta inferior sutil
+      ctx.font = '700 8.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isDark ? 'rgba(167, 243, 208, 0.78)' : 'rgba(4, 120, 87, 0.82)';
+      ctx.fillText(`ALMACÉN CENTRAL • 12 ENTRADAS`, 0, half - 17);
+
+      ctx.restore();
+      return;
+    }
+
     this.drawTileBase(ctx, s, '#293A2E', '#1C2920', '#E2F4E7', '#CDE9D5', 10);
 
     ctx.strokeStyle = '#A8D5BA';
@@ -3866,8 +4021,8 @@ export class InputManager {
       if (e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h) {
         const relX = (e.clientX - (r.x + r.w / 2)) / (r.w / 2);
         const relY = (e.clientY - (r.y + r.h / 2)) / (r.h / 2);
-        const targetTileX = relX * r.worldRange;
-        const targetTileY = relY * r.worldRange;
+        const targetTileX = (r.centerX || 0) + relX * r.worldRange;
+        const targetTileY = (r.centerY || 0) + relY * r.worldRange;
         this.game.renderer.centerOn(targetTileX, targetTileY);
         this.game.audio?.playTone?.(540, 'sine', 0.04, 0.015);
         return;
@@ -6080,10 +6235,48 @@ export class BeltFlowGame {
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
+  // Coloca un Almacén Central 3x3 (con 12 entradas perimetrales) en (rootX..rootX+2, rootY..rootY+2)
+  placeHub3x3(targetGrid, rootX = 4, rootY = 1) {
+    // Primero registrar las 8 casillas exteriores del 3x3
+    for (let dx = 0; dx < 3; dx++) {
+      for (let dy = 0; dy < 3; dy++) {
+        if (dx === 1 && dy === 1) continue;
+        const hx = rootX + dx;
+        const hy = rootY + dy;
+        targetGrid.set(hx, hy, {
+          x: hx,
+          y: hy,
+          type: 'delivery',
+          dir: 0,
+          hubRootX: rootX,
+          hubRootY: rootY,
+          isHubCenter: false,
+          fixed: true
+        });
+      }
+    }
+    // Registrar la casilla central al final para que renderice la plataforma 3x3 unificada por encima
+    const cx = rootX + 1;
+    const cy = rootY + 1;
+    targetGrid.set(cx, cy, {
+      x: cx,
+      y: cy,
+      type: 'delivery',
+      dir: 0,
+      hubRootX: rootX,
+      hubRootY: rootY,
+      isHubCenter: true,
+      fixed: true
+    });
+  }
+
   initDemoScene() {
     this.demoGrid = new Grid();
     this.demoSim = new Simulation(this.demoGrid);
     this.demoSim.game = this;
+
+    // Almacén Central 3x3 en la escena de demostración en (6..8, 1..3)
+    this.placeHub3x3(this.demoGrid, 6, 1);
 
     // 1. Veta Grande de Formas (2x2) en (1..2, 1..2)
     for (let dx = 0; dx < 2; dx++) {
@@ -6096,12 +6289,12 @@ export class BeltFlowGame {
       }
     }
 
-    // 2. Veta Grande de Pintura Lavanda (2x2) en (3..4, 0..1)
+    // 2. Veta Grande de Pintura Lavanda (2x2) en (3..4, -1..0)
     for (let dx = 0; dx < 2; dx++) {
       for (let dy = 0; dy < 2; dy++) {
-        this.demoGrid.setMine(3 + dx, 0 + dy, {
+        this.demoGrid.setMine(3 + dx, -1 + dy, {
           x: 3 + dx,
-          y: 0 + dy,
+          y: -1 + dy,
           isPaintVein: true,
           paintColor: PASTEL_COLORS.LAVENDER,
           shape: createPaintDrop(PASTEL_COLORS.LAVENDER)
@@ -6109,27 +6302,26 @@ export class BeltFlowGame {
       }
     }
 
-    // Línea Superior: Extractor de Formas -> Cinta -> Pintor alimentado por Mena de Pintura -> Hub Receptor
+    // Línea Oeste -> Entrada central izquierda del Almacén 3x3 (6, 2)
     this.demoGrid.set(2, 2, {
       x: 2, y: 2, type: 'extractor', dir: DIR.RIGHT,
       shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT), fixed: true
     });
     this.demoGrid.set(3, 2, { x: 3, y: 2, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
 
-    // Extractor de Pintura en (4, 1) inyectando gotas de tinte hacia abajo al Pintor en (4, 2)
-    this.demoGrid.set(4, 1, {
-      x: 4, y: 1, type: 'extractor', dir: DIR.DOWN,
+    // Extractor de Pintura en (4, 0) -> cinta (4, 1) -> Pintor en (4, 2)
+    this.demoGrid.set(4, 0, {
+      x: 4, y: 0, type: 'extractor', dir: DIR.DOWN,
       shape: createPaintDrop(PASTEL_COLORS.LAVENDER), fixed: true
     });
+    this.demoGrid.set(4, 1, { x: 4, y: 1, type: 'belt_fast', dir: DIR.DOWN, fixed: true });
     this.demoGrid.set(4, 2, {
       x: 4, y: 2, type: 'painter', dir: DIR.RIGHT,
       color: PASTEL_COLORS.LAVENDER, paintTank: 8, fixed: true
     });
     this.demoGrid.set(5, 2, { x: 5, y: 2, type: 'belt_hyper', dir: DIR.RIGHT, fixed: true });
-    this.demoGrid.set(6, 2, { x: 6, y: 2, type: 'belt_hyper', dir: DIR.DOWN, fixed: true });
-    this.demoGrid.set(6, 3, { x: 6, y: 3, type: 'delivery', dir: DIR.DOWN, fixed: true });
 
-    // Línea Inferior: Veta de Estrellas Coral (2x2) en (1..2, 4..5) -> Cintas MK2 -> Hub Receptor
+    // Línea Sur -> Entrada inferior central del Almacén 3x3 (7, 3)
     for (let dx = 0; dx < 2; dx++) {
       for (let dy = 0; dy < 2; dy++) {
         this.demoGrid.setMine(1 + dx, 4 + dy, {
@@ -6146,7 +6338,8 @@ export class BeltFlowGame {
     this.demoGrid.set(3, 4, { x: 3, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
     this.demoGrid.set(4, 4, { x: 4, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
     this.demoGrid.set(5, 4, { x: 5, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
-    this.demoGrid.set(6, 4, { x: 6, y: 4, type: 'belt_fast', dir: DIR.UP, fixed: true });
+    this.demoGrid.set(6, 4, { x: 6, y: 4, type: 'belt_fast', dir: DIR.RIGHT, fixed: true });
+    this.demoGrid.set(7, 4, { x: 7, y: 4, type: 'belt_fast', dir: DIR.UP, fixed: true });
   }
 
   startGameFromMenu() {
@@ -6159,10 +6352,14 @@ export class BeltFlowGame {
       setTimeout(() => {
         menuScreen.style.display = 'none';
         menuScreen.classList.remove('closing');
-        this.centerCameraOnLevel();
+        if (!this.hasCenteredOnce) {
+          this.centerCameraOnLevel();
+          this.hasCenteredOnce = true;
+        }
       }, 150);
-    } else {
+    } else if (!this.hasCenteredOnce) {
       this.centerCameraOnLevel();
+      this.hasCenteredOnce = true;
     }
   }
 
@@ -6252,83 +6449,147 @@ export class BeltFlowGame {
     }
   }
 
-  // Expande una casilla de mina en un gran yacimiento multi-casilla (2x2 o 3x2) sin pisar piezas fijas
-  expandMineCluster(cx, cy, mineTemplate, width = 2, height = 2) {
+  // Expande una casilla de mina en un gran yacimiento multi-casilla (3x3, 4x4, 5x5, 6x6) sin pisar el Almacén 3x3
+  expandMineCluster(cx, cy, mineTemplate, width = 3, height = 3) {
+    const midDx = Math.floor(width / 2);
+    const midDy = Math.floor(height / 2);
     for (let dx = 0; dx < width; dx++) {
       for (let dy = 0; dy < height; dy++) {
         const mx = cx + dx;
         const my = cy + dy;
+        // Respetar zona de seguridad alrededor del Almacén Central 3x3 (x: 4..6, y: 1..3)
+        if (mx >= 2 && mx <= 8 && my >= -1 && my <= 5) continue;
         const existingCell = this.grid.get(mx, my);
         if (existingCell && existingCell.fixed && existingCell.type !== 'extractor') continue;
+
         if (!this.grid.hasMine(mx, my)) {
-          this.grid.setMine(mx, my, {
-            x: mx,
-            y: my,
-            isPaintVein: !!mineTemplate.isPaintVein,
-            paintColor: mineTemplate.paintColor || null,
-            shape: Shapes.clone(mineTemplate.shape)
-          });
+          const isCenterTile = (dx === midDx && dy === midDy);
+          if (mineTemplate.resourceType) {
+            this.grid.setMine(mx, my, {
+              x: mx,
+              y: my,
+              resourceType: mineTemplate.resourceType,
+              shape: { dlcItem: mineTemplate.dlcItem }
+            });
+          } else {
+            this.grid.setMine(mx, my, {
+              x: mx,
+              y: my,
+              isPaintVein: !!mineTemplate.isPaintVein,
+              paintColor: mineTemplate.paintColor || null,
+              clusterLabel: isCenterTile ? (mineTemplate.label || (mineTemplate.isPaintVein ? `🎨 TINTA ${(mineTemplate.paintColor || '').toUpperCase()}` : `⛏️ MENA ${width}×${height}`)) : null,
+              shape: Shapes.clone(mineTemplate.shape)
+            });
+          }
         }
       }
     }
   }
 
-  // Genera un Mundo Gigante repleto de grandes Yacimientos de Formas y Menas de Pintura para conectar
-  populateMegaMapVeins(lvl) {
-    // 1. Menas de Pintura cercanas a la base central para que el jugador siempre tenga pigmentos a mano
-    const nearPaintClusters = [
-      { x: 3, y: -4, w: 3, h: 2, color: PASTEL_COLORS.LAVENDER },
-      { x: 3, y: 7, w: 3, h: 2, color: PASTEL_COLORS.MINT },
-      { x: -5, y: -3, w: 2, h: 3, color: PASTEL_COLORS.CORAL },
-      { x: -5, y: 6, w: 2, h: 3, color: PASTEL_COLORS.SKY },
-      { x: 11, y: -3, w: 3, h: 2, color: PASTEL_COLORS.LEMON }
+  // Crea el MAPA MUNDIAL PERMANENTE (520x520) una única vez: Almacén Central 3x3 + todos los anillos de menas hasta el último nivel
+  ensurePermanentWorld() {
+    if (this.worldInitialized) return;
+    this.worldInitialized = true;
+
+    this.grid.mines.clear();
+
+    // 1. ALMACÉN CENTRAL 3x3 PERMANENTE en (4..6, 1..3) con centro en (5, 2) y 12 entradas
+    this.placeHub3x3(this.grid, 4, 1);
+
+    // 2. ANILLO 1 — ZONA INICIAL CERCANA (Radio 8 a 15 casillas): Formas base y las 5 Menas de Pintura
+    const ring1Veins = [
+      // Formas básicas en los 4 puntos cardinales
+      { x: -6, y: 1, w: 3, h: 3, label: '⛏️ CÍRCULO MENTA', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) },
+      { x: 13, y: 1, w: 3, h: 3, label: '⛏️ CUADRADO CELESTE', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY) },
+      { x: 4, y: -9, w: 3, h: 3, label: '⛏️ TRIÁNGULO LAVANDA', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER) },
+      { x: 4, y: 10, w: 3, h: 3, label: '⛏️ ESTRELLA MELOCOTÓN', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.PEACH) },
+
+      // Menas de Pintura en las 4 esquinas cercanas + Norte
+      { x: -6, y: -7, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER, label: '🎨 TINTA LAVANDA' },
+      { x: 13, y: -7, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.MINT, label: '🎨 TINTA MENTA' },
+      { x: -6, y: 9, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL, label: '🎨 TINTA CORAL' },
+      { x: 13, y: 9, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.SKY, label: '🎨 TINTA CELESTE' },
+      { x: 4, y: -16, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 TINTA LIMÓN' }
     ];
 
-    for (const pc of nearPaintClusters) {
-      this.expandMineCluster(pc.x, pc.y, {
-        isPaintVein: true,
-        paintColor: pc.color,
-        shape: createPaintDrop(pc.color)
-      }, pc.w, pc.h);
-    }
+    // 3. ANILLO 2 — CINTURÓN INDUSTRIAL MEDIO (Radio 22 a 45 casillas): Yacimientos 4x4 de todas las geometrías
+    const ring2Veins = [
+      { x: -24, y: 0, w: 4, h: 4, label: '⛏️ ROMBO CORAL (4×4)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL) },
+      { x: 28, y: 0, w: 4, h: 4, label: '⛏️ HEXÁGONO CELESTE (4×4)', shape: createShape(SHAPE_TYPES.HEXAGON, PASTEL_COLORS.SKY) },
+      { x: -20, y: -20, w: 4, h: 4, label: '⛏️ ESTRELLA LIMÓN (4×4)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LEMON) },
+      { x: 24, y: -20, w: 4, h: 4, label: '⛏️ CÍRCULO CORAL (4×4)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.CORAL) },
+      { x: -20, y: 22, w: 4, h: 4, label: '⛏️ CUADRADO MENTA (4×4)', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.MINT) },
+      { x: 24, y: 22, w: 4, h: 4, label: '⛏️ TRIÁNGULO CELESTE (4×4)', shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.SKY) },
+      { x: 3, y: 26, w: 4, h: 4, label: '⛏️ MOLINO LAVANDA (4×4)', shape: createShape(SHAPE_TYPES.WINDMILL, PASTEL_COLORS.LAVENDER) },
+      { x: 3, y: -28, w: 4, h: 4, label: '⛏️ CRUZ MENTA (4×4)', shape: createShape(SHAPE_TYPES.CROSS, PASTEL_COLORS.MINT) },
+      { x: -12, y: 26, w: 4, h: 4, label: '⛏️ HEXÁGONO LAVANDA (4×4)', shape: createShape(SHAPE_TYPES.HEXAGON, PASTEL_COLORS.LAVENDER) },
+      { x: 18, y: -28, w: 4, h: 4, label: '⛏️ ROMBO MENTA (4×4)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.MINT) },
 
-    // 2. Grandes Yacimientos en el Mega-Mapa Exterior (-45..+55) para expandir una Mega-Fábrica adictiva
-    const outerVeins = [
-      // Anillo Medio (14 a 26 casillas)
-      { x: -14, y: -10, w: 3, h: 3, shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) },
-      { x: -16, y: 4, w: 3, h: 3, shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.SKY) },
-      { x: -12, y: 15, w: 3, h: 3, shape: createShape(SHAPE_TYPES.TRIANGLE, PASTEL_COLORS.LAVENDER) },
-      { x: 4, y: -14, w: 4, h: 2, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.PEACH) },
-      { x: 16, y: -11, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER },
-      { x: 20, y: 2, w: 3, h: 3, shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.CORAL) },
-      { x: 18, y: 12, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.MINT },
-      { x: 6, y: 16, w: 4, h: 3, shape: createShape(SHAPE_TYPES.HEXAGON, PASTEL_COLORS.SKY) },
-      { x: -4, y: -16, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL },
-      { x: 14, y: -4, w: 3, h: 2, isPaintVein: true, paintColor: PASTEL_COLORS.SKY },
-
-      // Anillo Exterior Lejano (28 a 50 casillas: Mega-Yacimientos 4x3 y 4x4)
-      { x: -30, y: -22, w: 4, h: 4, shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LEMON) },
-      { x: -32, y: -4, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON },
-      { x: -28, y: 18, w: 4, h: 4, shape: createShape(SHAPE_TYPES.WINDMILL, PASTEL_COLORS.LAVENDER) },
-      { x: 0, y: -28, w: 4, h: 4, shape: createShape(SHAPE_TYPES.CROSS, PASTEL_COLORS.MINT) },
-      { x: 28, y: -22, w: 4, h: 4, shape: createShape(SHAPE_TYPES.HEART, PASTEL_COLORS.CORAL) },
-      { x: 34, y: -4, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER },
-      { x: 32, y: 16, w: 4, h: 4, shape: createShape(SHAPE_TYPES.LIGHTNING, PASTEL_COLORS.LEMON) },
-      { x: 2, y: 30, w: 4, h: 4, shape: createShape(SHAPE_TYPES.LEAF, PASTEL_COLORS.MINT) },
-      { x: -18, y: 28, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.SKY },
-      { x: 20, y: -28, w: 4, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL }
+      // Grandes Lagos de Pintura 4x4 en el anillo medio
+      { x: -32, y: -12, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 LAGO TINTA LIMÓN' },
+      { x: 36, y: -12, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER, label: '🎨 LAGO TINTA LAVANDA' },
+      { x: -32, y: 14, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.MINT, label: '🎨 LAGO TINTA MENTA' },
+      { x: 36, y: 14, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL, label: '🎨 LAGO TINTA CORAL' },
+      { x: 4, y: 38, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.SKY, label: '🎨 LAGO TINTA CELESTE' }
     ];
 
-    for (const v of outerVeins) {
-      if (v.isPaintVein) {
+    // 4. ANILLO 3 — FRONTERA LOGÍSTICA LEJANA (Radio 55 a 95 casillas): Mega-Yacimientos 5x5 + Nodos Cuánticos
+    const ring3Veins = [
+      { x: -62, y: -6, w: 5, h: 5, label: '⛏️ CORAZÓN CORAL (5×5)', shape: createShape(SHAPE_TYPES.HEART, PASTEL_COLORS.CORAL) },
+      { x: 66, y: -6, w: 5, h: 5, label: '⛏️ RAYO LIMÓN (5×5)', shape: createShape(SHAPE_TYPES.LIGHTNING, PASTEL_COLORS.LEMON) },
+      { x: 3, y: 64, w: 5, h: 5, label: '⛏️ HOJA MENTA (5×5)', shape: createShape(SHAPE_TYPES.LEAF, PASTEL_COLORS.MINT) },
+      { x: 3, y: -64, w: 5, h: 5, label: '⛏️ MOLINO CELESTE (5×5)', shape: createShape(SHAPE_TYPES.WINDMILL, PASTEL_COLORS.SKY) },
+      { x: -50, y: -48, w: 5, h: 5, label: '⛏️ ROMBO LAVANDA (5×5)', shape: createShape(SHAPE_TYPES.DIAMOND, PASTEL_COLORS.LAVENDER) },
+      { x: 56, y: -48, w: 5, h: 5, label: '⛏️ HEXÁGONO LIMÓN (5×5)', shape: createShape(SHAPE_TYPES.HEXAGON, PASTEL_COLORS.LEMON) },
+      { x: -50, y: 52, w: 5, h: 5, label: '⛏️ CRUZ CORAL (5×5)', shape: createShape(SHAPE_TYPES.CROSS, PASTEL_COLORS.CORAL) },
+      { x: 56, y: 52, w: 5, h: 5, label: '⛏️ ESTRELLA CELESTE (5×5)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.SKY) },
+      { x: -68, y: 24, w: 5, h: 5, label: '⛏️ CÍRCULO LAVANDA (5×5)', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.LAVENDER) },
+      { x: 74, y: 24, w: 5, h: 5, label: '⛏️ CUADRADO CORAL (5×5)', shape: createShape(SHAPE_TYPES.SQUARE, PASTEL_COLORS.CORAL) },
+
+      // Mega-Reservas de Pintura 5x5 en la frontera lejana
+      { x: -72, y: -26, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL, label: '🎨 RESERVA CORAL (5×5)' },
+      { x: 76, y: -26, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.SKY, label: '🎨 RESERVA CELESTE (5×5)' },
+      { x: -28, y: -66, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.MINT, label: '🎨 RESERVA MENTA (5×5)' },
+      { x: 34, y: -66, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER, label: '🎨 RESERVA LAVANDA (5×5)' },
+      { x: -28, y: 68, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 RESERVA LIMÓN (5×5)' },
+
+      // Yacimientos Biomoleculares y Cuánticos (4x4) para los niveles del DLC Cuántico
+      { x: -44, y: -4, w: 4, h: 4, resourceType: 'SUGAR_CANE', dlcItem: 'glucose' },
+      { x: -44, y: 12, w: 4, h: 4, resourceType: 'FRUCTOSE_BEET', dlcItem: 'fructose' },
+      { x: 48, y: -4, w: 4, h: 4, resourceType: 'QUANTUM_GEODE', dlcItem: 'quantum_dust' },
+      { x: 48, y: 12, w: 4, h: 4, resourceType: 'CRYO_VENT', dlcItem: 'stabilizer' }
+    ];
+
+    // 5. ANILLO 4 — EXPEDICIÓN CONTINENTAL EXTREMA (Radio 105 a 150 casillas): Yacimientos Madre 6x6
+    const ring4Veins = [
+      { x: -118, y: -110, w: 6, h: 6, label: '⛏️ VETA MADRE ESTRELLAS (6×6)', shape: createShape(SHAPE_TYPES.STAR, PASTEL_COLORS.LEMON) },
+      { x: 120, y: -110, w: 6, h: 6, label: '⛏️ VETA MADRE CORAZÓN (6×6)', shape: createShape(SHAPE_TYPES.HEART, PASTEL_COLORS.CORAL) },
+      { x: -118, y: 110, w: 6, h: 6, label: '⛏️ VETA MADRE RAYO (6×6)', shape: createShape(SHAPE_TYPES.LIGHTNING, PASTEL_COLORS.LEMON) },
+      { x: 120, y: 110, w: 6, h: 6, label: '⛏️ VETA MADRE HOJA (6×6)', shape: createShape(SHAPE_TYPES.LEAF, PASTEL_COLORS.MINT) },
+      { x: -135, y: 0, w: 6, h: 6, label: '⛏️ VETA MADRE MOLINO (6×6)', shape: createShape(SHAPE_TYPES.WINDMILL, PASTEL_COLORS.LAVENDER) },
+      { x: 135, y: 0, w: 6, h: 6, label: '⛏️ VETA MADRE CRUZ (6×6)', shape: createShape(SHAPE_TYPES.CROSS, PASTEL_COLORS.SKY) },
+      { x: 2, y: -135, w: 6, h: 6, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER, label: '🎨 OCÉANO TINTA LAVANDA (6×6)' },
+      { x: 2, y: 135, w: 6, h: 6, isPaintVein: true, paintColor: PASTEL_COLORS.MINT, label: '🎨 OCÉANO TINTA MENTA (6×6)' }
+    ];
+
+    const allVeins = [...ring1Veins, ...ring2Veins, ...ring3Veins, ...ring4Veins];
+    for (const v of allVeins) {
+      if (v.resourceType) {
+        this.expandMineCluster(v.x, v.y, {
+          resourceType: v.resourceType,
+          dlcItem: v.dlcItem
+        }, v.w, v.h);
+      } else if (v.isPaintVein) {
         this.expandMineCluster(v.x, v.y, {
           isPaintVein: true,
           paintColor: v.paintColor,
+          label: v.label,
           shape: createPaintDrop(v.paintColor)
         }, v.w, v.h);
       } else {
         this.expandMineCluster(v.x, v.y, {
           isPaintVein: false,
+          label: v.label,
           shape: v.shape
         }, v.w, v.h);
       }
@@ -6336,7 +6597,7 @@ export class BeltFlowGame {
   }
 
   loadLevel(levelId) {
-    // 1. PERSISTENCIA DE MEGA-FÁBRICA: conservar todas las piezas construidas por el jugador al pasar de nivel
+    // 1. Guardar las piezas actuales de la Mega-Fábrica del jugador
     const currentUserPieces = this.grid.exportUserPieces();
     if (currentUserPieces.length > 0) {
       this.saveData.megaFactoryPieces = currentUserPieces;
@@ -6351,17 +6612,11 @@ export class BeltFlowGame {
     this.totalDelivered = 0;
     this.totalErrors = 0;
     this.isPaused = false;
-    this.sim.reset();
 
-    // Limpiar únicamente las piezas fijas del nivel anterior y regenerar las menas
-    for (const [k, cell] of this.grid.cells.entries()) {
-      if (cell.fixed) {
-        this.grid.cells.delete(k);
-      }
-    }
-    this.grid.mines.clear();
+    // 2. Asegurar que el Mapa Mundial Permanente y el Almacén Central 3x3 estén creados (NUNCA se borran ni cambian de sitio)
+    this.ensurePermanentWorld();
 
-    // Normalizar demandas del nivel
+    // 3. Normalizar demandas del nuevo nivel (todas se entregan en las 12 bocas del Almacén Central 3x3)
     if (lvl.demands && Array.isArray(lvl.demands)) {
       this.currentDemands = lvl.demands.map(d => ({
         ...d,
@@ -6379,43 +6634,22 @@ export class BeltFlowGame {
       this.totalQuota = lvl.quota;
     }
 
-    // Registrar piezas fijas del nivel y expandir cada mina en una ZONA GRANDE (2x2)
-    if (lvl.fixedGrid) {
-      for (const item of lvl.fixedGrid) {
-        if (item.type === 'mine') {
-          this.expandMineCluster(item.x, item.y, {
-            isPaintVein: !!item.isPaintVein,
-            paintColor: item.paintColor || null,
-            shape: Shapes.clone(item.shape)
-          }, 2, 2);
-        } else {
-          this.grid.set(item.x, item.y, {
-            x: item.x,
-            y: item.y,
-            type: item.type,
-            dir: item.dir !== undefined ? item.dir : DIR.RIGHT,
-            shape: item.shape ? Shapes.clone(item.shape) : null,
-            color: item.color || null,
-            secondary: item.secondary || false,
-            deliveryIndex: item.deliveryIndex !== undefined ? item.deliveryIndex : (item.secondary ? 1 : 0),
-            fixed: true
-          });
-        }
-      }
-    }
+    // Sin límite artificial de piezas para permitir autopistas logísticas desde menas lejanas
+    lvl.maxPieces = null;
 
-    // Poblar el Mega-Mapa con múltiples zonas grandes de Menas de Formas y Menas de Pintura
-    this.populateMegaMapVeins(lvl);
-
-    // Desbloquear herramientas clave para que el jugador pueda conectar su Mega-Fábrica libremente
-    const baseTools = ['belt', 'belt_fast', 'extractor', 'painter', 'cutter', 'splitter', 'merger', 'tunnel', 'trash'];
-    for (const t of baseTools) {
+    // Desbloquear todas las herramientas logísticas para conectar el mapa gigante libremente
+    const allLogisticsTools = [
+      'belt', 'belt_fast', 'belt_hyper', 'extractor', 'painter', 'cutter',
+      'mixer', 'factory_1x1', 'factory_2x2', 'splitter', 'merger',
+      'balancer', 'cross_hub', 'filter', 'crossing', 'tunnel', 'buffer', 'trash'
+    ];
+    for (const t of allLogisticsTools) {
       if (!lvl.availableTools.includes(t)) {
         lvl.availableTools.push(t);
       }
     }
 
-    // Restaurar la Mega-Fábrica persistente del jugador (si aún no había nada en memoria, cargar de saveData)
+    // Si es la primera carga desde localStorage, restaurar la Mega-Fábrica guardada
     if (this.grid.exportUserPieces().length === 0) {
       const savedMega = (this.saveData.megaFactoryPieces && this.saveData.megaFactoryPieces.length > 0)
         ? this.saveData.megaFactoryPieces
@@ -6425,7 +6659,7 @@ export class BeltFlowGame {
       }
     }
 
-    // Actualizar extractores colocados por el jugador para que sincronicen con la mena bajo ellos
+    // Sincronizar todos los extractores colocados por el jugador con la mena permanente bajo ellos
     for (const piece of this.grid.getAllPieces()) {
       if (piece.type === 'extractor' && !piece.fixed) {
         const mine = this.grid.getMine(piece.x, piece.y);
@@ -6434,10 +6668,6 @@ export class BeltFlowGame {
         }
       }
     }
-
-    this.undoStack = [];
-    this.redoStack = [];
-    this.ui.updateUndoRedoUI(false, false);
 
     this.saveData.nivelActual = lvl.id;
     this.ui.updateLevelInfo(lvl, this.currentDemands);
@@ -6593,17 +6823,8 @@ export class BeltFlowGame {
   }
 
   centerCameraOnLevel() {
-    if (!this.currentLevel || !this.currentLevel.fixedGrid) return;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of this.currentLevel.fixedGrid) {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    }
-    const midX = (minX + maxX) / 2;
-    const midY = (minY + maxY) / 2;
-    this.renderer.centerOn(midX, midY);
+    // Centrar siempre sobre el Almacén Central 3x3 permanente en (5, 2)
+    this.renderer.centerOn(5, 2);
   }
 
   selectTool(tool) {
@@ -7127,7 +7348,7 @@ export class BeltFlowGame {
   }
 
   setZoom(newZoom, centerX, centerY) {
-    const clamped = Math.max(0.28, Math.min(2.2, newZoom));
+    const clamped = Math.max(0.18, Math.min(2.2, newZoom));
     if (centerX !== undefined && centerY !== undefined) {
       const worldPos = this.renderer.screenToWorld(centerX, centerY);
       this.renderer.zoom = clamped;
@@ -7173,13 +7394,9 @@ export class BeltFlowGame {
     // Ignorar gotas de pintura pura si entran por accidente al Hub
     if (shape && shape.isPaintDrop) return;
 
-    const dIdx = deliveryPiece.deliveryIndex !== undefined 
-      ? deliveryPiece.deliveryIndex 
-      : (deliveryPiece.secondary ? 1 : 0);
-
+    // El Almacén Central 3x3 acepta cualquier demanda activa por cualquiera de sus 12 entradas
     let matchedDemand = null;
     for (const demand of this.currentDemands) {
-      if (demand.deliveryIndex !== undefined && demand.deliveryIndex !== dIdx) continue;
       if (Shapes.matches(shape, demand.shape)) {
         if (demand.delivered < demand.quota) {
           matchedDemand = demand;
