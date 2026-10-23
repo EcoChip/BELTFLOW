@@ -17,6 +17,13 @@
 import { LEVELS, SHAPE_TYPES, PASTEL_COLORS, COLOR_HEX, createShape, BIOMES, ACHIEVEMENTS, COSMETIC_SKINS } from './levels.js';
 import { QuantumDLC, RESOURCE_NODES, DLC_ITEMS, RECIPES } from './dlc_quantum.js';
 
+export function createPaintDrop(paintColor = 'lavender') {
+  return {
+    isPaintDrop: true,
+    paintColor
+  };
+}
+
 /* ==========================================================================
    1. GESTOR DE GUARDADO (SaveManager)
    ========================================================================== */
