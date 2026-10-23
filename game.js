@@ -3827,6 +3827,9 @@ export class InputManager {
     this.initialPinchZoom = 1.0;
     this.lastPinchMidX = 0;
     this.lastPinchMidY = 0;
+    this.wasMultiTouch = false;
+    this.touchStartCell = null;
+    this.touchDownTime = 0;
     this.longPressTimer = null;
     this.longPressTriggered = false;
 
@@ -3871,8 +3874,27 @@ export class InputManager {
       }
     }
 
-    this.canvas.setPointerCapture(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch (_) {}
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Si hay 2 o más dedos en pantalla: MODO MOVIMIENTO Y ZOOM (bloquea colocación de cintas)
+    if (this.activePointers.size >= 2) {
+      clearTimeout(this.longPressTimer);
+      this.wasMultiTouch = true;
+      this.isDraggingMap = true;
+      this.touchStartCell = null;
+      this.lastPlacedCell = null;
+      this.canvas.classList.add('grabbing');
+
+      const points = Array.from(this.activePointers.values());
+      this.initialPinchDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      this.initialPinchZoom = this.game.renderer.zoom;
+      this.lastPinchMidX = (points[0].x + points[1].x) / 2;
+      this.lastPinchMidY = (points[0].y + points[1].y) / 2;
+      return;
+    }
 
     // 1. Desplazamiento con botón central del ratón (disponible en ambos modos)
     if (e.button === 1) {
@@ -3894,6 +3916,7 @@ export class InputManager {
     }
 
     if (this.activePointers.size === 1) {
+      this.wasMultiTouch = false;
       this.isPointerDown = true;
       this.button = e.button;
       this.pointerStartX = e.clientX;
@@ -3903,8 +3926,9 @@ export class InputManager {
       this.isDraggingMap = false;
       this.longPressTriggered = false;
       this.lastPlacedCell = null;
+      this.touchDownTime = performance.now();
 
-      // 3. MODO VISTA: clic izquierdo no coloca, desplaza la cámara libremente
+      // 3. MODO VISTA: clic izquierdo o 1 dedo no coloca, desplaza la cámara libremente
       if (this.game.mode === 'view') {
         this.isDraggingMap = true;
         this.canvas.classList.add('grabbing');
@@ -3912,21 +3936,21 @@ export class InputManager {
       }
 
       // 4. MODO EDICIÓN: colocar o borrar piezas
+      const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
+      this.touchStartCell = { x: pos.gridX, y: pos.gridY };
+
       if (e.pointerType === 'touch') {
+        // En táctil NO colocamos cinta en el instante 0ms por si el usuario está apoyando el 2º dedo para mover/zoom.
+        // La cinta se colocará al arrastrar con 1 solo dedo en línea o al levantar el dedo (tap).
         clearTimeout(this.longPressTimer);
         this.longPressTimer = setTimeout(() => {
-          this.longPressTriggered = true;
-          const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
-          this.game.removePieceAt(pos.gridX, pos.gridY);
-        }, 380);
-
-        const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
-        if (this.isBeltTool(this.game.selectedTool)) {
-          this.game.handleBeltPlacement(pos.gridX, pos.gridY);
-          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
-        }
+          if (!this.wasMultiTouch && this.activePointers.size === 1 && !this.isDraggingMap) {
+            this.longPressTriggered = true;
+            const p = this.game.renderer.screenToWorld(e.clientX, e.clientY);
+            this.game.removePieceAt(p.gridX, p.gridY);
+          }
+        }, 420);
       } else {
-        const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         if (e.button === 2 || this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else if (e.button === 0) {
@@ -3939,14 +3963,6 @@ export class InputManager {
           }
         }
       }
-    } else if (this.activePointers.size === 2) {
-      // Gesto de pinza táctil para zoom + paneo con 2 dedos
-      clearTimeout(this.longPressTimer);
-      const points = Array.from(this.activePointers.values());
-      this.initialPinchDistance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-      this.initialPinchZoom = this.game.renderer.zoom;
-      this.lastPinchMidX = (points[0].x + points[1].x) / 2;
-      this.lastPinchMidY = (points[0].y + points[1].y) / 2;
     }
   }
 
@@ -3957,12 +3973,14 @@ export class InputManager {
       this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
 
-    const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
-    this.lastHoverGrid = { x: pos.gridX, y: pos.gridY };
-    this.game.updateGhost(pos.gridX, pos.gridY);
+    // GESTOS DE 2 DEDOS: Mover cámara + Pinch-to-Zoom (NUNCA coloca cintas)
+    if (this.activePointers.size >= 2) {
+      clearTimeout(this.longPressTimer);
+      this.wasMultiTouch = true;
+      this.isDraggingMap = true;
+      this.touchStartCell = null;
+      this.lastPlacedCell = null;
 
-    // Zoom por pinza táctil y paneo simultáneo (2 dedos)
-    if (this.activePointers.size === 2) {
       const points = Array.from(this.activePointers.values());
       const currentDist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
       const midX = (points[0].x + points[1].x) / 2;
@@ -3973,7 +3991,7 @@ export class InputManager {
         this.game.renderer.camY += (midY - this.lastPinchMidY);
       }
 
-      if (this.initialPinchDistance > 0) {
+      if (this.initialPinchDistance > 12 && Math.abs(currentDist - this.initialPinchDistance) > 6) {
         const factor = currentDist / this.initialPinchDistance;
         this.game.setZoom(this.initialPinchZoom * factor, midX, midY);
       }
@@ -3981,6 +3999,21 @@ export class InputManager {
       this.lastPinchMidY = midY;
       return;
     }
+
+    // Si venimos de un gesto de 2 dedos y aún queda 1 dedo apoyado, seguir moviendo la cámara sin poner cintas
+    if (this.wasMultiTouch) {
+      const dx = e.clientX - this.lastPointerX;
+      const dy = e.clientY - this.lastPointerY;
+      this.game.renderer.camX += dx;
+      this.game.renderer.camY += dy;
+      this.lastPointerX = e.clientX;
+      this.lastPointerY = e.clientY;
+      return;
+    }
+
+    const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
+    this.lastHoverGrid = { x: pos.gridX, y: pos.gridY };
+    this.game.updateGhost(pos.gridX, pos.gridY);
 
     const dx = e.clientX - this.lastPointerX;
     const dy = e.clientY - this.lastPointerY;
@@ -4020,21 +4053,24 @@ export class InputManager {
       return;
     }
 
-    // MODO EDICIÓN
+    // MODO EDICIÓN (1 solo dedo o ratón)
     if (e.pointerType === 'touch') {
+      // Pequeña ventana de 45ms al apoyar el primer dedo para detectar si el usuario apoya el segundo dedo
+      if (performance.now() - this.touchDownTime < 45) {
+        return;
+      }
+
       if (this.isBeltTool(this.game.selectedTool)) {
-        // En táctil con cualquier herramienta de cinta: trazo continuo con curvas automáticas
-        if (!this.lastPlacedCell) {
-          this.game.handleBeltPlacement(pos.gridX, pos.gridY);
-          this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
-        } else if (this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
-          this.game.dragDrawBelt(this.lastPlacedCell.x, this.lastPlacedCell.y, pos.gridX, pos.gridY);
+        // Con 1 dedo y herramienta de cinta: al arrastrar de una casilla a otra se trazan las cintas en línea recta
+        const startCell = this.lastPlacedCell || this.touchStartCell;
+        if (startCell && (startCell.x !== pos.gridX || startCell.y !== pos.gridY)) {
+          this.game.dragDrawBelt(startCell.x, startCell.y, pos.gridX, pos.gridY);
           this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
         }
       } else if (this.game.selectedTool === 'erase') {
         this.game.removePieceAt(pos.gridX, pos.gridY);
       } else {
-        // En táctil con otras herramientas, arrastrar con 1 dedo desplaza la cámara si se mueve más de 10px
+        // En táctil con otras máquinas (extractor, pintor, etc.), arrastrar con 1 dedo desplaza la cámara
         if (totalDist > 10) {
           this.isDraggingMap = true;
           this.game.renderer.camX += dx;
@@ -4047,7 +4083,6 @@ export class InputManager {
         if (this.game.selectedTool === 'erase') {
           this.game.removePieceAt(pos.gridX, pos.gridY);
         } else if (this.isBeltTool(this.game.selectedTool)) {
-          // Trazar cintas continuas con curvado automático de esquinas
           if (!this.lastPlacedCell) {
             this.game.handleBeltPlacement(pos.gridX, pos.gridY);
             this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
@@ -4056,7 +4091,6 @@ export class InputManager {
             this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
           }
         } else {
-          // Otras herramientas: colocar celda a celda
           if (!this.lastPlacedCell || this.lastPlacedCell.x !== pos.gridX || this.lastPlacedCell.y !== pos.gridY) {
             this.game.placePieceAt(pos.gridX, pos.gridY);
             this.lastPlacedCell = { x: pos.gridX, y: pos.gridY };
@@ -4083,6 +4117,14 @@ export class InputManager {
       this.isMiddleDragging = false;
     }
 
+    // Si quedaba 1 dedo tras levantar el segundo en un gesto multitáctil, sincronizar su posición para evitar saltos
+    if (this.activePointers.size === 1 && this.wasMultiTouch) {
+      const remaining = Array.from(this.activePointers.values())[0];
+      this.lastPointerX = remaining.x;
+      this.lastPointerY = remaining.y;
+      return;
+    }
+
     this.canvas.classList.remove('grabbing');
 
     if (this.game && this.game.state === 'menu') {
@@ -4090,15 +4132,25 @@ export class InputManager {
     }
 
     if (this.activePointers.size === 0) {
+      // Si fue un gesto de 2 dedos (zoom o mover mapa), salir limpiamente sin colocar ninguna cinta
+      if (this.wasMultiTouch) {
+        this.wasMultiTouch = false;
+        this.isPointerDown = false;
+        this.isDraggingMap = false;
+        this.longPressTriggered = false;
+        this.lastPlacedCell = null;
+        this.touchStartCell = null;
+        return;
+      }
+
       const totalDist = Math.hypot(e.clientX - this.pointerStartX, e.clientY - this.pointerStartY);
 
-      // Si es un tap limpio
-      if (!this.isDraggingMap && !this.longPressTriggered && totalDist < 12) {
+      // Si es un toque limpio con 1 solo dedo
+      if (!this.isDraggingMap && !this.longPressTriggered && totalDist < 14) {
         const pos = this.game.renderer.screenToWorld(e.clientX, e.clientY);
         const clickedPiece = this.game.grid.get(pos.gridX, pos.gridY);
 
         if (this.game.mode === 'view') {
-          // En modo vista, tocar abre la configuración de la máquina
           if (clickedPiece) {
             if (clickedPiece.type === 'factory_1x1' || clickedPiece.type === 'factory_2x2' || clickedPiece.type === 'factory_2x2_part') {
               this.game.ui.openMachineSidebar(clickedPiece);
@@ -4109,7 +4161,6 @@ export class InputManager {
             }
           }
         } else if (this.game.mode === 'edit' && e.pointerType === 'touch') {
-          // En modo edición táctil: colocar o borrar piezas
           if (this.game.selectedTool === 'erase') {
             this.game.removePieceAt(pos.gridX, pos.gridY);
           } else if (this.isBeltTool(this.game.selectedTool)) {
@@ -4126,6 +4177,7 @@ export class InputManager {
       this.isDraggingMap = false;
       this.longPressTriggered = false;
       this.lastPlacedCell = null;
+      this.touchStartCell = null;
     }
   }
 
@@ -6753,6 +6805,19 @@ export class BeltFlowGame {
       while (cx !== toX) {
         cx += stepX;
         steps.push({ x: cx, y: cy, dir: stepX > 0 ? DIR.RIGHT : DIR.LEFT });
+      }
+    }
+
+    // Asegurar que la casilla de origen (fromX, fromY) también tenga cinta orientada en la dirección de la línea
+    if (steps.length > 0) {
+      const firstDir = steps[0].dir;
+      this.placementDir = firstDir;
+      const startPiece = this.grid.get(fromX, fromY);
+      if (!startPiece) {
+        this.placePieceAt(fromX, fromY);
+      } else if (this.isBeltToolType(startPiece.type) && !startPiece.fixed) {
+        startPiece.type = this.selectedTool;
+        startPiece.dir = firstDir;
       }
     }
 
