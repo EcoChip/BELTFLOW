@@ -220,7 +220,11 @@ export class QuantumDLC {
    * Comprueba si una Mega Ensambladora (2x2) cabe en las coordenadas indicadas
    */
   static canPlaceFactory2x2(grid, rootX, rootY) {
-    if (rootX < 0 || rootY < 0 || rootX + 1 >= grid.size || rootY + 1 >= grid.size) {
+    if (grid.inBounds) {
+      if (!grid.inBounds(rootX, rootY) || !grid.inBounds(rootX + 1, rootY + 1)) {
+        return false;
+      }
+    } else if (rootX < 0 || rootY < 0 || rootX + 1 >= grid.size || rootY + 1 >= grid.size) {
       return false;
     }
     const coords = [

@@ -46,6 +46,10 @@
             <span class="menu-btn-icon">↺</span>
             <span class="menu-btn-text" id="menu-continue-label">Continuar</span>
           </button>
+          <button id="menu-btn-dlc" class="menu-btn menu-btn-dlc">
+            <span class="menu-btn-icon">🍬</span>
+            <span class="menu-btn-text">Jugar DLC: Azúcar & Proteína</span>
+          </button>
           <button id="menu-btn-levels" class="menu-btn">
             <span class="menu-btn-icon">☰</span>
             <span class="menu-btn-text">Seleccionar Nivel (68)</span>
@@ -82,7 +86,7 @@
             <span class="menu-stat-item" id="menu-total-levels">🏆 0/68</span>
             <span class="menu-stat-item" id="menu-coins">🪙 0</span>
           </div>
-          <span class="menu-version">v4.0 • Edición Cyber-Industrial & Mobile</span>
+          <span class="menu-version">v4.2 • Edición Mundo Permanente & DLC Azúcar</span>
         </div>
       </aside>
 
@@ -109,14 +113,15 @@
         </div>
       </div>
 
-      <!-- Objetivo de formas y cuota -->
+      <!-- Objetivo de formas y cuota (Toca para localizar la mena en el mapa) -->
       <div class="hud-panel">
-        <div class="target-box">
-          <div class="target-shape-preview" title="Forma objetivo requerida">
+        <div class="target-box" id="btn-locate-mine" title="📍 Toca para centrar la cámara en la mena necesaria para este nivel" style="cursor: pointer;">
+          <div class="target-shape-preview" style="position: relative;">
             <canvas id="target-preview-canvas" width="64" height="64"></canvas>
+            <span class="locate-mine-badge" title="Localizar Mena">📍</span>
           </div>
           <div class="quota-status">
-            <span class="quota-label">Entregadas</span>
+            <span class="quota-label">Entregadas <small style="opacity:0.75;">(📍 Ir a Mena)</small></span>
             <span class="quota-numbers mono" id="quota-display">0 / 5</span>
             <div class="quota-progress-track">
               <div class="quota-progress-bar" id="quota-progress-bar"></div>
@@ -193,10 +198,20 @@
           </svg>
         </button>
 
-        <!-- Alternador Modo Zen 🍃 / Desafío ⚡ -->
-        <button id="btn-zen-toggle" class="mode-toggle-btn zen" title="Alternar Modo Zen (Relajado, sin vidas ni cronómetro) / Desafío" aria-label="Modo Zen/Desafío">
-          <span class="mode-toggle-icon" id="zen-toggle-icon">🍃</span>
-          <span class="mode-toggle-label" id="zen-toggle-label">Zen</span>
+        <!-- Deshacer (Ctrl+Z) — Siempre visible en los primeros botones -->
+        <button id="btn-undo" class="icon-btn" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+          </svg>
+        </button>
+
+        <!-- Rehacer (Ctrl+Y) — Siempre visible en los primeros botones -->
+        <button id="btn-redo" class="icon-btn" title="Rehacer (Ctrl+Y)" aria-label="Rehacer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 7v6h-6"></path>
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+          </svg>
         </button>
 
         <!-- Alternador Modo Vista / Edición (Tecla Q) -->
@@ -206,27 +221,23 @@
           <span class="mode-toggle-key mono">Q</span>
         </button>
 
+        <!-- Jugar DLC Azúcar & Proteína (Salto directo a Niveles 61-64) -->
+        <button id="btn-dlc-toggle" class="mode-toggle-btn dlc active" title="Jugar DLC Biomolecular: Azúcar & Proteína (Niveles 61–64)" aria-label="Jugar DLC Azúcar y Proteína">
+          <span class="mode-toggle-icon">🍬</span>
+          <span class="mode-toggle-label">DLC Azúcar</span>
+        </button>
+
+        <!-- Alternador Modo Zen 🍃 / Desafío ⚡ -->
+        <button id="btn-zen-toggle" class="mode-toggle-btn zen" title="Alternar Modo Zen (Relajado, sin vidas ni cronómetro) / Desafío" aria-label="Modo Zen/Desafío">
+          <span class="mode-toggle-icon" id="zen-toggle-icon">🍃</span>
+          <span class="mode-toggle-label" id="zen-toggle-label">Zen</span>
+        </button>
+
         <!-- Telemetría IPM por casilla (Tecla I) -->
         <button id="btn-ipm-toggle" class="mode-toggle-btn" title="Mostrar/Ocultar telemetría IPM en cada máquina (Tecla I)" aria-label="Telemetría IPM">
           <span class="mode-toggle-icon">📊</span>
           <span class="mode-toggle-label">IPM</span>
           <span class="mode-toggle-key mono">I</span>
-        </button>
-
-        <!-- Deshacer (Ctrl+Z) -->
-        <button id="btn-undo" class="icon-btn" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M3 7v6h6"></path>
-            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
-          </svg>
-        </button>
-
-        <!-- Rehacer (Ctrl+Y) -->
-        <button id="btn-redo" class="icon-btn" title="Rehacer (Ctrl+Y)" aria-label="Rehacer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M21 7v6h-6"></path>
-            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
-          </svg>
         </button>
 
         <!-- Pausa / Reanudar -->
@@ -299,12 +310,6 @@
           </svg>
         </button>
 
-        <!-- Expansión Biomolecular & Cuántica (DLC) -->
-        <button id="btn-dlc-toggle" class="mode-toggle-btn dlc active" title="Alternar Expansión Biomolecular & Cuántica (DLC)" aria-label="DLC">
-          <span class="mode-toggle-icon">🧬</span>
-          <span class="mode-toggle-label">DLC</span>
-        </button>
-
         <!-- Ajustes -->
         <button id="btn-settings" class="icon-btn" title="Configuración" aria-label="Ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -330,16 +335,29 @@
       <span class="mode-pill-hint mono">[Q]</span>
     </div>
 
-    <!-- Botones flotantes (Táctil y acceso rápido) -->
-    <aside class="floating-actions" aria-label="Acciones rápidas">
-      <!-- Botón Modo Vista / Edición (Táctil y rápido) -->
-      <button id="btn-fab-mode" class="fab mode-fab" title="Alternar modo Vista / Edición (Q)" aria-label="Modo">
-        <span id="fab-mode-icon" style="font-size: 18px; line-height: 1;">✏️</span>
-        <span class="fab-label" id="fab-mode-label">EDICIÓN</span>
+    <!-- Botones flotantes (Táctil y acceso rápido ergonómico) -->
+    <aside class="floating-actions" aria-label="Acciones rápidas táctiles">
+      <!-- Deshacer (Táctil directo) -->
+      <button id="btn-fab-undo" class="fab" title="Deshacer última acción (Ctrl+Z)" aria-label="Deshacer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 7v6h6"></path>
+          <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+        </svg>
+        <span class="fab-label">ATRÁS</span>
       </button>
 
-      <!-- Botón de Rotación -->
-      <button id="btn-fab-rotate" class="fab" title="Rotar pieza (R)" aria-label="Rotar">
+      <!-- Rehacer (Táctil directo) -->
+      <button id="btn-fab-redo" class="fab" title="Rehacer acción (Ctrl+Y)" aria-label="Rehacer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M21 7v6h-6"></path>
+          <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+        </svg>
+        <span class="fab-label">REHACER</span>
+      </button>
+
+      <!-- Botón de Rotación con indicador de dirección en vivo -->
+      <button id="btn-fab-rotate" class="fab" title="Rotar dirección de pieza (R)" aria-label="Rotar">
+        <span class="fab-dir-badge" id="fab-rotate-dir">➡️</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <polyline points="23 4 23 10 17 10"></polyline>
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -347,14 +365,8 @@
         <span class="fab-label">ROTAR</span>
       </button>
 
-      <!-- Botón Receta / Inspección (Tecla E / Móvil) -->
-      <button id="btn-fab-recipe" class="fab" title="Inspeccionar / Configurar máquina (Tecla E)" aria-label="Configurar">
-        <span style="font-size: 18px; line-height: 1;">🧪</span>
-        <span class="fab-label">CONFIG</span>
-      </button>
-
       <!-- Botón Modo Borrar -->
-      <button id="btn-fab-erase" class="fab" title="Alternar modo demolición (Clic derecho)" aria-label="Borrar">
+      <button id="btn-fab-erase" class="fab" title="Alternar modo borrar (o arrastra para borrar)" aria-label="Borrar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <polyline points="3 6 5 6 21 6"></polyline>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -362,21 +374,39 @@
         <span class="fab-label">BORRAR</span>
       </button>
 
-      <!-- Botón Reiniciar Mapa (Limpiar piezas) -->
-      <button id="btn-fab-clear" class="fab" title="Reiniciar mapa (limpiar piezas) [Ctrl+R / Shift+R]" aria-label="Limpiar mapa">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
-        </svg>
-        <span class="fab-label">MAPA</span>
+      <!-- Botón Modo Vista / Edición (Táctil y rápido) -->
+      <button id="btn-fab-mode" class="fab mode-fab" title="Alternar modo Vista / Edición (Q)" aria-label="Modo">
+        <span id="fab-mode-icon" style="font-size: 16px; line-height: 1;">✏️</span>
+        <span class="fab-label" id="fab-mode-label">EDICIÓN</span>
       </button>
 
-      <!-- Centrar cámara -->
-      <button id="btn-fab-center" class="fab" title="Centrar cámara" aria-label="Centrar">
+      <!-- Botón Receta / Inspección (Tecla E / Móvil) -->
+      <button id="btn-fab-recipe" class="fab" title="Inspeccionar / Configurar receta o color (Tecla E)" aria-label="Configurar">
+        <span style="font-size: 16px; line-height: 1;">🧪</span>
+        <span class="fab-label">RECETA</span>
+      </button>
+
+      <!-- Localizar Mena necesaria para el nivel actual -->
+      <button id="btn-fab-locate" class="fab" title="Ir a la mena necesaria para este nivel" aria-label="Buscar Mena">
+        <span style="font-size: 16px; line-height: 1;">📍</span>
+        <span class="fab-label">MENA</span>
+      </button>
+
+      <!-- Centrar cámara en el Almacén Central 3x3 -->
+      <button id="btn-fab-center" class="fab" title="Centrar cámara en el Almacén Central 3x3" aria-label="Centrar Hub">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <circle cx="12" cy="12" r="10"></circle>
           <circle cx="12" cy="12" r="3"></circle>
         </svg>
-        <span class="fab-label">CENTRO</span>
+        <span class="fab-label">HUB 3×3</span>
+      </button>
+
+      <!-- Botón Reiniciar Mapa (Limpiar piezas) -->
+      <button id="btn-fab-clear" class="fab" title="Limpiar piezas colocadas [Ctrl+R]" aria-label="Limpiar mapa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
+        </svg>
+        <span class="fab-label">LIMPIAR</span>
       </button>
 
       <!-- Zoom In -->
@@ -401,9 +431,13 @@
 
     <!-- Barra inferior con selector de componentes -->
     <nav class="bottom-dock" aria-label="Barra de herramientas">
-      <!-- Pestañas de filtro rápido de categorías (optimizado para táctil / móvil) -->
+      <!-- Pestañas de filtro rápido: Modo "Solo Nivel" vs "Todas" + Categorías -->
       <div class="toolbar-categories" id="toolbar-categories">
-        <button class="toolbar-cat-btn active" data-cat="all">Todas</button>
+        <button id="btn-dock-level-filter" class="toolbar-level-filter-btn" title="Alternar entre ver solo las máquinas necesarias de este nivel o ver todas las máquinas">
+          🎯 Solo Nivel
+        </button>
+        <span class="toolbar-divider"></span>
+        <button class="toolbar-cat-btn active" data-cat="all">Todas (18)</button>
         <button class="toolbar-cat-btn" data-cat="logistics">Logística</button>
         <button class="toolbar-cat-btn" data-cat="process">Proceso</button>
       </div>

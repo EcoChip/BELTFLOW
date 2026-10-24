@@ -4586,6 +4586,8 @@ export class UIManager {
   constructor(game) {
     this.game = game;
     this.activeChapter = 1;
+    this.activeToolCategory = 'all';
+    this.onlyLevelTools = false;
     this.hackerClicks = 0;
     this.lastHackerClick = 0;
     this.bindDOM();
@@ -4603,6 +4605,12 @@ export class UIManager {
       e.stopPropagation();
       this.game.audio.playPlaf();
       this.game.startGameFromMenu();
+    });
+
+    document.getElementById('menu-btn-dlc')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.game.audio?.playPlaf?.();
+      this.game.launchSugarProteinDLC();
     });
 
     document.querySelector('.menu-preview-overlay')?.addEventListener('click', (e) => {
@@ -4672,6 +4680,10 @@ export class UIManager {
     document.getElementById('btn-speed')?.addEventListener('click', () => this.game.cycleSpeed());
     document.getElementById('btn-restart-level')?.addEventListener('click', () => this.game.restartCurrentLevel());
 
+    // Localizar mena requerida en el mapa
+    document.getElementById('btn-locate-mine')?.addEventListener('click', () => this.game.locateRequiredMine());
+    document.getElementById('btn-fab-locate')?.addEventListener('click', () => this.game.locateRequiredMine());
+
     // Botón reiniciar mapa (limpiar piezas colocadas)
     const btnClearMap = document.getElementById('btn-clear-map');
     if (btnClearMap) btnClearMap.addEventListener('click', () => this.game.restartLevelMap());
@@ -4733,6 +4745,24 @@ export class UIManager {
       this.game.toggleIPMOverlay();
     });
 
+    // Alternador de filtro en el dock: "🎯 Solo Nivel" vs "🧰 Ver Todas"
+    const levelFilterBtn = document.getElementById('btn-dock-level-filter');
+    if (levelFilterBtn) {
+      levelFilterBtn.addEventListener('click', () => {
+        this.onlyLevelTools = !this.onlyLevelTools;
+        levelFilterBtn.classList.toggle('filter-active', this.onlyLevelTools);
+        levelFilterBtn.textContent = this.onlyLevelTools ? '🎯 Solo Nivel: SÍ' : '🎯 Solo Nivel';
+        this.filterToolbarByCategory(this.activeToolCategory || 'all');
+        this.game.audio?.playTone?.(600, 'sine', 0.05, 0.02);
+        this.showToast(
+          this.onlyLevelTools
+            ? '🎯 Mostrando solo las cintas y máquinas necesarias para este nivel'
+            : '🧰 Mostrando las 18 cintas y máquinas completas',
+          1900
+        );
+      });
+    }
+
     // Pestañas de filtro de categoría en la barra de herramientas inferior
     const catBtns = document.querySelectorAll('.toolbar-cat-btn[data-cat]');
     catBtns.forEach(btn => {
@@ -4745,14 +4775,9 @@ export class UIManager {
       });
     });
 
-    // Toggle de la Expansión Biomolecular & Cuántica (DLC)
+    // Botón para jugar el DLC Biomolecular: Azúcar & Proteína (Niveles 61–64)
     document.getElementById('btn-dlc-toggle')?.addEventListener('click', () => {
-      QuantumDLC.isEnabled = !QuantumDLC.isEnabled;
-      const btn = document.getElementById('btn-dlc-toggle');
-      if (btn) btn.classList.toggle('active', QuantumDLC.isEnabled);
-      this.game.audio.playPlaf();
-      this.showToast(QuantumDLC.isEnabled ? "🧬 Expansión Biomolecular & Cuántica Activa" : "Expansión desactivada", 1800);
-      this.updateAvailableTools(this.game.currentLevel?.availableTools || ['belt', 'extractor']);
+      this.game.launchSugarProteinDLC();
     });
 
     // Botón flotante para inspección y configuración de máquinas (Tecla E / Móvil)
@@ -4772,10 +4797,12 @@ export class UIManager {
       }
     });
 
-    // Botones de Modo Zen y Deshacer / Rehacer
+    // Botones de Modo Zen y Deshacer / Rehacer (HUD superior y barra flotante táctil)
     document.getElementById('btn-zen-toggle')?.addEventListener('click', () => this.game.toggleZenMode());
     document.getElementById('btn-undo')?.addEventListener('click', () => this.game.undo());
     document.getElementById('btn-redo')?.addEventListener('click', () => this.game.redo());
+    document.getElementById('btn-fab-undo')?.addEventListener('click', () => this.game.undo());
+    document.getElementById('btn-fab-redo')?.addEventListener('click', () => this.game.redo());
 
     // Botones de cierre y apertura de los modales
     document.getElementById('btn-upgrades-modal')?.addEventListener('click', () => this.toggleUpgradesModal(true));
@@ -4944,7 +4971,10 @@ export class UIManager {
         this.game.selectTool('erase');
       }
     });
-    document.getElementById('btn-fab-center')?.addEventListener('click', () => this.game.centerCameraOnLevel());
+    document.getElementById('btn-fab-center')?.addEventListener('click', () => {
+      this.game.centerCameraOnLevel();
+      this.showToast("🎯 Cámara centrada en el Almacén Central 3×3", 1400);
+    });
     document.getElementById('btn-fab-zoomin')?.addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 1.2));
     document.getElementById('btn-fab-zoomout')?.addEventListener('click', () => this.game.setZoom(this.game.renderer.zoom * 0.8));
 
@@ -5099,9 +5129,13 @@ export class UIManager {
   }
 
   updateAvailableTools(tools) {
+    const coreTools = this.game.currentLevel?.coreTools || tools || ['belt', 'extractor'];
     const cards = document.querySelectorAll('.tool-card');
     cards.forEach(card => {
       const tool = card.dataset.tool;
+      const isCore = coreTools.includes(tool);
+      card.classList.toggle('needed-for-level', isCore);
+
       const isDlcTool = (tool === 'factory_1x1' || tool === 'factory_2x2');
       if (isDlcTool) {
         if (!QuantumDLC.isEnabled && !tools.includes(tool)) {
@@ -5120,9 +5154,7 @@ export class UIManager {
       }
     });
 
-    if (this.activeToolCategory && this.activeToolCategory !== 'all') {
-      this.filterToolbarByCategory(this.activeToolCategory);
-    }
+    this.filterToolbarByCategory(this.activeToolCategory || 'all');
 
     const colorBar = document.getElementById('painter-color-bar');
     if (colorBar) {
@@ -5150,7 +5182,9 @@ export class UIManager {
   filterToolbarByCategory(cat = 'all') {
     const logisticsTools = new Set(['belt', 'belt_fast', 'belt_hyper', 'belt_slow', 'tunnel', 'splitter', 'merger', 'balancer', 'crossing', 'filter', 'buffer', 'portal_in', 'portal_out']);
     const processTools = new Set(['extractor', 'painter', 'cutter', 'rotator', 'mixer', 'cross_hub', 'factory_1x1', 'factory_2x2', 'trash', 'erase']);
+    const coreTools = new Set(this.game.currentLevel?.coreTools || ['belt', 'extractor']);
     const cards = document.querySelectorAll('.tool-card');
+
     cards.forEach(card => {
       const tool = card.dataset.tool;
       const isDlcTool = (tool === 'factory_1x1' || tool === 'factory_2x2');
@@ -5158,6 +5192,13 @@ export class UIManager {
         card.style.display = 'none';
         return;
       }
+
+      // Si está activo el modo "🎯 Solo Nivel", mostrar únicamente las herramientas necesarias de ese nivel
+      if (this.onlyLevelTools && !coreTools.has(tool) && tool !== 'erase') {
+        card.style.display = 'none';
+        return;
+      }
+
       if (cat === 'all') {
         card.style.display = '';
       } else if (cat === 'logistics') {
@@ -6115,16 +6156,27 @@ export class UIManager {
   }
 
   updateUndoRedoUI(canUndo, canRedo) {
-    const uBtn = document.getElementById('btn-undo');
-    const rBtn = document.getElementById('btn-redo');
-    if (uBtn) {
-      uBtn.style.opacity = canUndo ? '1' : '0.45';
-      uBtn.style.pointerEvents = canUndo ? 'auto' : 'none';
-    }
-    if (rBtn) {
-      rBtn.style.opacity = canRedo ? '1' : '0.45';
-      rBtn.style.pointerEvents = canRedo ? 'auto' : 'none';
-    }
+    const uBtns = [document.getElementById('btn-undo'), document.getElementById('btn-fab-undo')];
+    const rBtns = [document.getElementById('btn-redo'), document.getElementById('btn-fab-redo')];
+    uBtns.forEach(uBtn => {
+      if (uBtn) {
+        uBtn.style.opacity = canUndo ? '1' : '0.45';
+        uBtn.style.pointerEvents = 'auto';
+      }
+    });
+    rBtns.forEach(rBtn => {
+      if (rBtn) {
+        rBtn.style.opacity = canRedo ? '1' : '0.45';
+        rBtn.style.pointerEvents = 'auto';
+      }
+    });
+  }
+
+  updateRotateDirUI(dir) {
+    const badge = document.getElementById('fab-rotate-dir');
+    if (!badge) return;
+    const arrows = ['➡️', '⬇️', '⬅️', '⬆️'];
+    badge.textContent = arrows[(dir || 0) % 4] || '➡️';
   }
 
   showToast(msg, duration = 2200) {
@@ -6201,6 +6253,7 @@ export class BeltFlowGame {
     this.painterColor = PASTEL_COLORS.MINT;
     this.defaultFactoryRecipe = 'combine_shapes';
     this.mode = 'edit'; // 'edit' (Edición) o 'view' (Vista)
+    this.locateCursor = 0;
 
     // Pilas de Deshacer / Rehacer y Modo Zen
     this.undoStack = [];
@@ -6223,6 +6276,7 @@ export class BeltFlowGame {
     this.ui.updateModeUI(this.mode);
     this.ui.updateZenToggleUI(this.gameMode);
     this.ui.updateUndoRedoUI(false, false);
+    this.ui.updateRotateDirUI(this.placementDir);
     this.updateCanvasCursor();
     this.loadLevel(this.saveData.nivelActual || 1);
     this.ui.updateMenuStats();
@@ -6469,6 +6523,7 @@ export class BeltFlowGame {
               x: mx,
               y: my,
               resourceType: mineTemplate.resourceType,
+              clusterLabel: isCenterTile ? (mineTemplate.label || null) : null,
               shape: { dlcItem: mineTemplate.dlcItem }
             });
           } else {
@@ -6496,7 +6551,7 @@ export class BeltFlowGame {
     // 1. ALMACÉN CENTRAL 3x3 PERMANENTE en (4..6, 1..3) con centro en (5, 2) y 12 entradas
     this.placeHub3x3(this.grid, 4, 1);
 
-    // 2. ANILLO 1 — ZONA INICIAL CERCANA (Radio 8 a 15 casillas): Formas base y las 5 Menas de Pintura
+    // 2. ANILLO 1 — ZONA INICIAL CERCANA (Radio 8 a 18 casillas): Formas base, 5 Menas de Pintura y Yacimientos DLC Azúcar & Proteína
     const ring1Veins = [
       // Formas básicas en los 4 puntos cardinales
       { x: -6, y: 1, w: 3, h: 3, label: '⛏️ CÍRCULO MENTA', shape: createShape(SHAPE_TYPES.CIRCLE, PASTEL_COLORS.MINT) },
@@ -6509,7 +6564,12 @@ export class BeltFlowGame {
       { x: 13, y: -7, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.MINT, label: '🎨 TINTA MENTA' },
       { x: -6, y: 9, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.CORAL, label: '🎨 TINTA CORAL' },
       { x: 13, y: 9, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.SKY, label: '🎨 TINTA CELESTE' },
-      { x: 4, y: -16, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 TINTA LIMÓN' }
+      { x: 4, y: -16, w: 3, h: 3, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 TINTA LIMÓN' },
+
+      // Yacimientos DLC Biomolecular (Azúcar, Proteína y Anomalía Cuántica) accesibles cerca del Hub 3x3
+      { x: -14, y: 1, w: 3, h: 3, resourceType: 'sugar_deposit', dlcItem: 'sugar_crystal', label: '🍬 MENA DE AZÚCAR (3×3)' },
+      { x: -14, y: 7, w: 3, h: 3, resourceType: 'protein_deposit', dlcItem: 'raw_protein', label: '🧬 MENA DE PROTEÍNA (3×3)' },
+      { x: 20, y: 1, w: 3, h: 3, resourceType: 'quantum_anomaly', dlcItem: 'subatomic_particle', label: '⚛️ ANOMALÍA CUÁNTICA (3×3)' }
     ];
 
     // 3. ANILLO 2 — CINTURÓN INDUSTRIAL MEDIO (Radio 22 a 45 casillas): Yacimientos 4x4 de todas las geometrías
@@ -6533,7 +6593,7 @@ export class BeltFlowGame {
       { x: 4, y: 38, w: 4, h: 4, isPaintVein: true, paintColor: PASTEL_COLORS.SKY, label: '🎨 LAGO TINTA CELESTE' }
     ];
 
-    // 4. ANILLO 3 — FRONTERA LOGÍSTICA LEJANA (Radio 55 a 95 casillas): Mega-Yacimientos 5x5 + Nodos Cuánticos
+    // 4. ANILLO 3 — FRONTERA LOGÍSTICA LEJANA (Radio 55 a 95 casillas): Mega-Yacimientos 5x5 + Nodos Cuánticos 4x4
     const ring3Veins = [
       { x: -62, y: -6, w: 5, h: 5, label: '⛏️ CORAZÓN CORAL (5×5)', shape: createShape(SHAPE_TYPES.HEART, PASTEL_COLORS.CORAL) },
       { x: 66, y: -6, w: 5, h: 5, label: '⛏️ RAYO LIMÓN (5×5)', shape: createShape(SHAPE_TYPES.LIGHTNING, PASTEL_COLORS.LEMON) },
@@ -6553,11 +6613,11 @@ export class BeltFlowGame {
       { x: 34, y: -66, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.LAVENDER, label: '🎨 RESERVA LAVANDA (5×5)' },
       { x: -28, y: 68, w: 5, h: 5, isPaintVein: true, paintColor: PASTEL_COLORS.LEMON, label: '🎨 RESERVA LIMÓN (5×5)' },
 
-      // Yacimientos Biomoleculares y Cuánticos (4x4) para los niveles del DLC Cuántico
-      { x: -44, y: -4, w: 4, h: 4, resourceType: 'SUGAR_CANE', dlcItem: 'glucose' },
-      { x: -44, y: 12, w: 4, h: 4, resourceType: 'FRUCTOSE_BEET', dlcItem: 'fructose' },
-      { x: 48, y: -4, w: 4, h: 4, resourceType: 'QUANTUM_GEODE', dlcItem: 'quantum_dust' },
-      { x: 48, y: 12, w: 4, h: 4, resourceType: 'CRYO_VENT', dlcItem: 'stabilizer' }
+      // Grandes Yacimientos Biomoleculares y Cuánticos (4x4) para producción masiva del DLC
+      { x: -44, y: -4, w: 4, h: 4, resourceType: 'sugar_deposit', dlcItem: 'sugar_crystal', label: '🍬 GRAN VETA AZÚCAR (4×4)' },
+      { x: -44, y: 12, w: 4, h: 4, resourceType: 'protein_deposit', dlcItem: 'raw_protein', label: '🧬 GRAN VETA PROTEÍNA (4×4)' },
+      { x: 48, y: -4, w: 4, h: 4, resourceType: 'quantum_anomaly', dlcItem: 'subatomic_particle', label: '⚛️ GRAN ANOMALÍA CUÁNTICA (4×4)' },
+      { x: 48, y: 12, w: 4, h: 4, resourceType: 'sugar_deposit', dlcItem: 'sugar_crystal', label: '🍬 RESERVA SACAROSA ESTE (4×4)' }
     ];
 
     // 5. ANILLO 4 — EXPEDICIÓN CONTINENTAL EXTREMA (Radio 105 a 150 casillas): Yacimientos Madre 6x6
@@ -6577,7 +6637,8 @@ export class BeltFlowGame {
       if (v.resourceType) {
         this.expandMineCluster(v.x, v.y, {
           resourceType: v.resourceType,
-          dlcItem: v.dlcItem
+          dlcItem: v.dlcItem,
+          label: v.label
         }, v.w, v.h);
       } else if (v.isPaintVein) {
         this.expandMineCluster(v.x, v.y, {
@@ -6593,6 +6654,96 @@ export class BeltFlowGame {
           shape: v.shape
         }, v.w, v.h);
       }
+    }
+  }
+
+  // Lanza directamente la Expansión Biomolecular: Azúcar & Proteína (Niveles 61–64)
+  launchSugarProteinDLC() {
+    QuantumDLC.isEnabled = true;
+    const dlcBtn = document.getElementById('btn-dlc-toggle');
+    if (dlcBtn) dlcBtn.classList.add('active');
+
+    let targetDlcLevel = 61;
+    if (this.currentLevel && this.currentLevel.id >= 61 && this.currentLevel.id <= 64) {
+      targetDlcLevel = this.currentLevel.id < 64 ? this.currentLevel.id + 1 : 61;
+    }
+
+    if (this.state === 'menu') {
+      this.startGameFromMenu();
+    }
+
+    this.loadLevel(targetDlcLevel);
+
+    // Preseleccionar la receta correspondiente al nivel del DLC para máxima comodidad
+    if (targetDlcLevel === 61) {
+      this.defaultFactoryRecipe = 'sugar_cube';
+    } else if (targetDlcLevel === 62) {
+      this.defaultFactoryRecipe = 'protein_bar';
+    } else if (targetDlcLevel === 63) {
+      this.defaultFactoryRecipe = 'refined_sugar_cube';
+    } else if (targetDlcLevel === 64) {
+      this.defaultFactoryRecipe = 'quantum_sugar_cube';
+    }
+    this.ui.syncFactoryRecipeChips(this.defaultFactoryRecipe);
+
+    // Encuadrar cámara entre las menas de Azúcar/Proteína (-13, 3) y el Almacén Central 3x3 (5, 2)
+    this.renderer.centerOn(-4, 3);
+    this.audio?.playVictory?.();
+    this.ui.showToast(`🍬 DLC Azúcar & Proteína — Nivel ${targetDlcLevel}: ${this.currentLevel.name}`, 3200);
+  }
+
+  // Localiza en el mapa permanente la mena necesaria para el nivel actual y mueve la cámara hacia ella
+  locateRequiredMine() {
+    this.ensurePermanentWorld();
+    const demands = this.currentDemands || [];
+    if (demands.length === 0) return;
+
+    const matchingMines = [];
+    for (const m of this.grid.mines.values()) {
+      // Solo tomar la casilla central de cada yacimiento (o cada 3 casillas) para no repetir todas las celdas del mismo bloque
+      if (!m.clusterLabel && (Math.abs(m.x) % 3 !== 0 || Math.abs(m.y) % 3 !== 0)) continue;
+
+      for (const d of demands) {
+        const req = d.shape;
+        if (!req) continue;
+        if (req.dlcItem) {
+          // Si pide un producto DLC (sugar_cube, protein_bar, refined_sugar_cube, quantum_sugar_cube)
+          if (req.dlcItem === 'sugar_cube' || req.dlcItem === 'refined_sugar_cube') {
+            if (m.resourceType === 'sugar_deposit') matchingMines.push(m);
+          } else if (req.dlcItem === 'protein_bar') {
+            if (m.resourceType === 'protein_deposit' || m.resourceType === 'sugar_deposit') matchingMines.push(m);
+          } else if (req.dlcItem === 'quantum_sugar_cube') {
+            if (m.resourceType === 'quantum_anomaly' || m.resourceType === 'sugar_deposit' || m.resourceType === 'protein_deposit') matchingMines.push(m);
+          } else if (m.shape?.dlcItem === req.dlcItem) {
+            matchingMines.push(m);
+          }
+        } else {
+          // Forma geométrica base o de pintura
+          const baseType = req.base || req.type;
+          const mBase = m.shape?.base || m.shape?.type;
+          if (mBase && baseType && mBase === baseType && !m.isPaintVein) {
+            matchingMines.push(m);
+          }
+        }
+      }
+    }
+
+    // Ordenar por cercanía al Almacén Central 3x3 (5, 2)
+    matchingMines.sort((a, b) => Math.hypot(a.x - 5, a.y - 2) - Math.hypot(b.x - 5, b.y - 2));
+
+    if (matchingMines.length > 0) {
+      const targetMine = matchingMines[this.locateCursor % matchingMines.length];
+      this.locateCursor++;
+      this.renderer.centerOn(targetMine.x, targetMine.y);
+      this.audio?.playTone?.(680, 'sine', 0.07, 0.025);
+      const sx = (targetMine.x + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camX;
+      const sy = (targetMine.y + 0.5) * this.renderer.tileSize * this.renderer.zoom + this.renderer.camY;
+      this.renderer.addParticles(sx, sy, 22, '#00F0FF');
+      const label = targetMine.clusterLabel || (targetMine.resourceType ? `Mena DLC (${targetMine.x}, ${targetMine.y})` : `Mena (${targetMine.x}, ${targetMine.y})`);
+      this.ui.showToast(`📍 ${label} localizada en (${targetMine.x}, ${targetMine.y})`, 2200);
+    } else {
+      this.centerCameraOnLevel();
+      this.ui.showToast("🎯 Centrado en el Almacén Central 3×3", 1600);
     }
   }
 
@@ -6612,6 +6763,7 @@ export class BeltFlowGame {
     this.totalDelivered = 0;
     this.totalErrors = 0;
     this.isPaused = false;
+    this.locateCursor = 0;
 
     // 2. Asegurar que el Mapa Mundial Permanente y el Almacén Central 3x3 estén creados (NUNCA se borran ni cambian de sitio)
     this.ensurePermanentWorld();
@@ -6636,6 +6788,22 @@ export class BeltFlowGame {
 
     // Sin límite artificial de piezas para permitir autopistas logísticas desde menas lejanas
     lvl.maxPieces = null;
+
+    // Guardar la lista original de máquinas necesarias para el filtro "🎯 Solo Nivel" antes de añadir las 18 herramientas
+    if (!lvl.coreTools) {
+      const baseSet = new Set(lvl.availableTools || ['belt', 'extractor']);
+      baseSet.add('belt');
+      baseSet.add('belt_fast');
+      baseSet.add('extractor');
+      baseSet.add('tunnel');
+      lvl.coreTools = Array.from(baseSet);
+    }
+
+    // Si es un nivel del DLC (61-64), ajustar automáticamente el preset de receta
+    if (lvl.id === 61) this.defaultFactoryRecipe = 'sugar_cube';
+    else if (lvl.id === 62) this.defaultFactoryRecipe = 'protein_bar';
+    else if (lvl.id === 63) this.defaultFactoryRecipe = 'refined_sugar_cube';
+    else if (lvl.id === 64) this.defaultFactoryRecipe = 'quantum_sugar_cube';
 
     // Desbloquear todas las herramientas logísticas para conectar el mapa gigante libremente
     const allLogisticsTools = [
@@ -6841,6 +7009,7 @@ export class BeltFlowGame {
         const oldDir = existing.dir;
         existing.dir = (existing.dir + 1) % 4;
         this.placementDir = existing.dir;
+        this.ui?.updateRotateDirUI?.(this.placementDir);
         this.recordAction({
           type: 'rotate',
           x: existing.x,
@@ -6855,6 +7024,7 @@ export class BeltFlowGame {
     }
 
     this.placementDir = (this.placementDir + 1) % 4;
+    this.ui?.updateRotateDirUI?.(this.placementDir);
     this.audio.playRotate();
     this.updateGhost();
   }
@@ -6941,6 +7111,8 @@ export class BeltFlowGame {
         this.placementDir = detectedDir;
       }
     }
+
+    this.ui?.updateRotateDirUI?.(this.placementDir);
 
     this.renderer.ghost = {
       x: gridX,
